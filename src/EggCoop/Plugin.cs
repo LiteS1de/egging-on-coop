@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -12,9 +13,10 @@ namespace EggCoop
         public ConfigEntry<string> Nick, SignalUrl, StunServers, LastJoin;
         public ConfigEntry<int> Port, GhostDelayMs;
         public ConfigEntry<KeyCode> MenuKey;
+        public ConfigEntry<bool> Collide, CrackOnHit;
     }
 
-    [BepInPlugin("eggcoop", "Egging On Co-op", "0.1.0")]
+    [BepInPlugin("eggcoop", "Egging On Co-op", "0.2.0")]
     public class Plugin : BaseUnityPlugin
     {
         public static ManualLogSource Log;
@@ -41,12 +43,18 @@ namespace EggCoop
             cfg.LastJoin = Config.Bind("Network", "LastJoin", "", "Последний код или IP");
             cfg.GhostDelayMs = Config.Bind("Network", "GhostDelayMs", 100, "Насколько призраки отстают ради плавности (мс). Больше — плавнее на плохой сети");
             Ghost.Delay = cfg.GhostDelayMs.Value / 1000f;
+            cfg.Collide = Config.Bind("Host", "Collide", true, "Яйца сталкиваются (false — проходят друг сквозь друга). Решает хост");
+            cfg.CrackOnHit = Config.Bind("Host", "CrackOnHit", false, "Удар о друга может разбить скорлупу. Решает хост");
             joinText = cfg.LastJoin.Value;
             net = new CoopNet(this, cfg);
             net.OnState += (id, s) => pending[id] = s;
             net.OnLeave += RemoveGhost;
+            net.OnSettings += (c, k) => { Ghost.Collide = c; Ghost.CrackOnHit = k; };
+            ApplyOwnSettings();
             ReadTestArgs();
             if (dataDir != null) IsolateData();
+            // Two full copies of the game need ~15 GB together; smaller textures keep the lab inside a 16 GB PC.
+            if (lab) { QualitySettings.globalTextureMipmapLimit = 3; Application.targetFrameRate = 30; }
             Log.LogInfo($"Egging On Co-op loaded. {cfg.MenuKey.Value} opens the menu.");
         }
 
@@ -66,6 +74,12 @@ namespace EggCoop
                 else if (a[i] == "-coop-shot") float.TryParse(next, out shotEvery);
                 else if (a[i] == "-coop-lab") lab = true;
                 else if (a[i] == "-coop-data") dataDir = next;
+                else if (a[i] == "-coop-collide") cfg.Collide.Value = next == "1";
+                else if (a[i] == "-coop-crack") cfg.CrackOnHit.Value = next == "1";
+#if LAB
+                else if (a[i] == "-coop-noshove") noShove = true;
+                else if (a[i] == "-coop-standtest") { standTest = true; PatchCrackLog(); }
+#endif
             }
         }
 
@@ -108,22 +122,105 @@ namespace EggCoop
                 Ghost.Delay = ms / 1000f;
                 Log.LogInfo($"Lab: ghost delay {ms} ms");
             }
+            if (!lowApplied && inGame) ApplyLowPreset();
             if (Screen.fullScreenMode != FullScreenMode.Windowed || Screen.width != 960)
                 Screen.SetResolution(960, 540, FullScreenMode.Windowed);
             var title = inGame ? null : FindObjectOfType<TitleScreen>();
-            if (title != null && TitleScreen.menuInitialized) { Log.LogInfo("Lab: Continue"); title.Continue(); nextLabStep += 10f; }
+            // Outside "dev" the title waits for "press any key"; marking the menu initialized is what that key press leads to.
+            if (title != null && !TitleScreen.menuInitialized) { Log.LogInfo("Lab: skip press-any-key"); TitleScreen.menuInitialized = true; }
+            else if (title != null) { Log.LogInfo("Lab: Continue"); title.Continue(); nextLabStep += 10f; }
 #if LAB
             // The host's egg gets a shove now and then, so the guest has a moving target to follow,
             // but only while nobody plays it: a person at the keyboard wins.
             // Lab builds only (-c Lab): a release must never move an egg the player left alone.
-            if (inGame && net.IsHost && Time.unscaledTime - lastInput > 15f && !World.instance.GetEggCore().yolkState)
+            if (inGame && net.IsHost && !noShove && Time.unscaledTime - lastInput > 15f && !World.instance.GetEggCore().yolkState)
             {
                 World.instance.GetEggCore().eggRigidbody.AddForce(Quaternion.Euler(0, Random.Range(0, 360), 0) * new Vector3(0, 3f, 4f), ForceMode.VelocityChange);
                 // The game autosaves only once the player has pressed a movement key; the shove stands in for that.
-                if (!Persistent.instance.saveData.eggMoved) { Persistent.instance.saveData.eggMoved = true; Persistent.instance.ConstantAutoSave(); }            }
+                if (!Persistent.instance.saveData.eggMoved) { Persistent.instance.saveData.eggMoved = true; Persistent.instance.ConstantAutoSave(); }
+            }
             // The game pauses itself after 5 min with no buttons pressed (EggController.afkTimeout); long lab runs must not.
             if (inGame) HarmonyLib.AccessTools.Field(typeof(EggController), "afkTimeout").SetValue(World.instance.GetEgg(), 0f);
+            if (inGame && standTest && !net.IsHost) StandTestStep();
 #endif
+        }
+
+#if LAB
+        // "-coop-standtest" (guest): drop onto the host's ghost from 1.5 m, then from 40 m, and log where we ended up
+        // and whether the shell cracked. Read with: Select-String LogOutput.log "Lab stand"
+        bool noShove, standTest;
+
+        // Which collider the egg hit last, so a crack can be blamed on the friend or on the floor.
+        static string lastHit = "-";
+        static float lastHitSpeed;
+        static void HitPrefix(Collision collision)
+        {
+            lastHit = collision.collider.name + (collision.collider.transform.parent?.name.StartsWith("EggCoop_Ghost") == true ? "(friend)" : "");
+            lastHitSpeed = collision.relativeVelocity.magnitude;
+            if (lastHit.EndsWith("(friend)")) Log.LogInfo(System.FormattableString.Invariant($"Lab hit friend at {lastHitSpeed:0.0} m/s"));
+        }
+        static void CrackPrefix(MethodBase __originalMethod) =>
+            Log.LogInfo(System.FormattableString.Invariant($"Lab crack: {__originalMethod.Name} after hitting {lastHit} at {lastHitSpeed:0.0} m/s"));
+        void PatchCrackLog()
+        {
+            var h = new HarmonyLib.Harmony("eggcoop.lab.crack");
+            h.Patch(HarmonyLib.AccessTools.Method(typeof(EggController), nameof(EggController.OnCollisionEnterEvent)), new HarmonyLib.HarmonyMethod(typeof(Plugin), nameof(HitPrefix)));
+            foreach (var m in new[] { nameof(EggController.FullCrack), nameof(EggController.SemiCrack) })
+                h.Patch(HarmonyLib.AccessTools.Method(typeof(EggController), m), new HarmonyLib.HarmonyMethod(typeof(Plugin), nameof(CrackPrefix)));
+        }
+        int standPhase, cracksBefore;
+        float dropHeight;
+        void StandTestStep()
+        {
+            var g = ghosts.Values.FirstOrDefault();
+            if (g == null) return;
+            var core = World.instance.GetEggCore();
+            if (standPhase % 2 == 0)
+            {
+                if (core.yolkState) return;   // wait for the shell to rebuild before the next drop
+                cracksBefore = Persistent.instance.saveData.crackCount;
+                if (standPhase % 4 == 0) { dropHeight = 1.5f; TeleportTo(g.Position); }   // land on the friend's head
+                else
+                {
+                    // Slam: 2.5 m above the friend, 22 m/s straight down (enough to crack on a floor).
+                    // Not a long drop (the start area has a roof) and not sideways (the henhouse planks get hit first).
+                    dropHeight = 0f;
+                    TeleportTo(g.Position + Vector3.up * 1f);
+                    World.instance.GetEgg().SetVelocities(Vector3.down * 22f, Vector3.zero);
+                }
+                nextLabStep += 5f;   // land and settle
+            }
+            else
+            {
+                float dy = World.instance.GetEgg().GetPosition().y - g.Position.y;
+                bool cracked = Persistent.instance.saveData.crackCount != cracksBefore || core.yolkState;
+                Log.LogInfo(System.FormattableString.Invariant(
+                    $"Lab stand: {(dropHeight > 0 ? "drop 1.5 m" : "slam 22 m/s")} collide={Ghost.Collide} crackOnHit={Ghost.CrackOnHit} dy={dy:0.00} horiz={Vector3.Distance(World.instance.GetEgg().GetPosition() - Vector3.up * dy, g.Position):0.00} cracked={cracked}"));
+                nextLabStep += 5f;
+            }
+            standPhase++;
+        }
+#endif
+
+        // Lab copies use the game's own Steam Deck "low" preset (Persistent.lowDefaultsOverrides): RAM for two copies.
+        // Options live in the lab's isolated settings.prefs, never the player's.
+        bool lowApplied;
+        void ApplyLowPreset()
+        {
+            lowApplied = true;
+            var low = HarmonyLib.AccessTools.Field(typeof(Persistent), "lowDefaultsOverrides")?.GetValue(Persistent.instance) as System.Collections.IEnumerable;
+            if (low == null) { Log.LogWarning("Lab: no low preset found"); return; }
+            var applied = new List<string>();
+            foreach (var kv in low)
+            {
+                var t = kv.GetType();
+                var key = (OptionType)t.GetProperty("Key").GetValue(kv);
+                var value = (int)t.GetProperty("Value").GetValue(kv);
+                if (Persistent.instance.GetOptionValue(key) == value) continue;
+                try { Persistent.instance.SetOptionValue(key, value); } catch (System.Exception) { }   // stored anyway; applied on next start
+                applied.Add($"{key}={value}");
+            }
+            Log.LogInfo("Lab: low preset " + (applied.Count > 0 ? string.Join(" ", applied) : "already set"));
         }
 
         void RunTestArgs(bool inGame)
@@ -132,7 +229,7 @@ namespace EggCoop
             if (testMode != null && inGame)
             {
                 Log.LogInfo("Test harness: " + testMode);
-                if (testMode == "host") net.Host(); else net.Join(testJoin);
+                if (testMode == "host") { ApplyOwnSettings(); net.Host(); } else net.Join(testJoin);
                 testMode = null;
             }
             // Probe for tools/compare_probe.py: wall-clock ms, own egg, every ghost, 10 times a second.
@@ -219,6 +316,14 @@ namespace EggCoop
             World.instance.GetProgress().Teleport(pos.y);
         }
 
+        // Our own config rules while we host or play alone; a host's choice replaces it while we are a guest.
+        void ApplyOwnSettings()
+        {
+            Ghost.Collide = cfg.Collide.Value;
+            Ghost.CrackOnHit = cfg.CrackOnHit.Value;
+            net.SetSettings(Ghost.Collide, Ghost.CrackOnHit);
+        }
+
         void SetMenu(bool open)
         {
             menuOpen = open;
@@ -233,6 +338,20 @@ namespace EggCoop
             if (tag == null) tag = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, fontSize = 15 };
             DrawNameTags();
             if (menuOpen) window = GUILayout.Window(0x6E99, window, DrawMenu, "Egging On Co-op  (" + cfg.MenuKey.Value + ")");
+        }
+
+        void DrawHostToggles()
+        {
+            bool c = GUILayout.Toggle(cfg.Collide.Value, " Столкновения (иначе проходим сквозь друг друга)");
+            bool k = cfg.CrackOnHit.Value;
+            GUI.enabled = c;
+            k = GUILayout.Toggle(k, " Удар о друга разбивает скорлупу");
+            GUI.enabled = true;
+            if (c != cfg.Collide.Value || k != cfg.CrackOnHit.Value)
+            {
+                cfg.Collide.Value = c; cfg.CrackOnHit.Value = k;
+                ApplyOwnSettings();
+            }
         }
 
         void DrawNameTags()
@@ -262,7 +381,8 @@ namespace EggCoop
             if (!net.Active)
             {
                 GUILayout.Space(6);
-                if (GUILayout.Button("Создать игру (порт " + cfg.Port.Value + ")", GUILayout.Height(30))) net.Host();
+                DrawHostToggles();
+                if (GUILayout.Button("Создать игру (порт " + cfg.Port.Value + ")", GUILayout.Height(30))) { ApplyOwnSettings(); net.Host(); }
                 GUILayout.Space(6);
                 GUILayout.Label("Код приглашения или IP:порт:");
                 joinText = GUILayout.TextField(joinText, 64);
@@ -275,6 +395,8 @@ namespace EggCoop
             else
             {
                 GUILayout.Label(net.IsHost ? $"Вы хост. Игроков: {net.PlayerCount}/{CoopNet.MaxPlayers}" : $"Вы гость. Игроков: {net.PlayerCount}");
+                if (net.IsHost) DrawHostToggles();
+                else GUILayout.Label((Ghost.Collide ? "Столкновения: вкл" : "Режим призраков: сквозь друг друга") + (Ghost.Collide && Ghost.CrackOnHit ? ", удар разбивает скорлупу" : "") + "  (решает хост)");
                 if (net.Code != null)
                 {
                     GUILayout.BeginHorizontal();

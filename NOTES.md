@@ -67,6 +67,27 @@ Lesson: the game auto-pauses after 5 min of no buttons while the egg rests (EggC
   last of those — vanilla behaviour, not the mod.
 - Autosave also waits for the first real movement key (`saveData.eggMoved`); the lab shove sets it.
 
+## Stage 2: collisions (0.2.0, 2026-10-21, tools/stand_test.ps1)
+- Ghost = kinematic Rigidbody moved in FixedUpdate (MovePosition) + copy of the egg's MeshCollider on layer "Dynamic".
+  Collider stays off while it overlaps our egg (spawn/teleport) to avoid a depenetration launch.
+- Host toggles (F9, sent to guests, MsgSettings): Collide (default on), CrackOnHit (default off).
+  CrackOnHit off = ghost collider tagged "FallCancel" → the game caps impact damage at damageThreshold/2 (never cracks).
+- PASS: ghost mode → no contact at all, egg falls through (0.16–0.23 m from friend's centre).
+- PASS: collide on → contacts logged ("Lab hit friend"), dropping on the friend's head pushes you off (0.7–2.5 m).
+  You cannot balance on a friend: both are eggs, you slide off.
+- PASS: crack off → zero cracks caused by the friend (all cracks in the runs were planks/boxes of the henhouse).
+- NOT VERIFIED: crack on at ≥16 m/s (crack threshold). In the cramped henhouse start, test impacts on the friend
+  reached only 12.6 m/s. Check by hand in an open area.
+
+## Lab incident (2026-10-21) — real saves overwritten, restored
+- Two copies (~7.7 GB private each) exhausted 16 GB RAM, the PC crashed. On the next run one copy started WITHOUT
+  BepInEx (old copy still held LogOutput.log; the launcher found the stale "Lab data dir" line and believed it).
+  The plain game wrote the owner's real sav_2.sav / savm.sav. Restored from backups/LocalLow-EggingOn-2026-10-20.zip
+  (hashes match); the overwritten versions are in backups/real-after-crash-2026-10-21.
+- lab.ps1 now: waits for old copies to exit, refuses a locked log, kills a copy that does not report isolation,
+  needs 5 GB free RAM per copy, snapshots + verifies the real save folder each run and auto-restores on change.
+- Lab copies run the game's Steam Deck low preset + texture mip limit 3: ~4.5 GB private each.
+
 ## Release checklist (before sending a zip to friends)
 - [ ] Build with `tools/lab.ps1 pack` only (Release). It must not contain the lab auto-shove:
       `ilspycmd -t EggCoop.Plugin <zip>/BepInEx/plugins/EggCoop/EggCoop.dll | Select-String AddForce` → 0 hits.
