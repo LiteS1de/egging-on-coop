@@ -24,4 +24,5 @@ Egging On Co-op 0.1 — видно яйца друзей (2–4 игрока)
 - Лог мода: BepInEx\LogOutput.log
 
 Настройки (ник, порт, клавиша): BepInEx\config\eggcoop.cfg
+Если яйца друзей дёргаются (плохой интернет, мобильная сеть) — поставьте там GhostDelayMs = 200.
 Удаление: удалите winhttp.dll, doorstop_config.ini и папку BepInEx.

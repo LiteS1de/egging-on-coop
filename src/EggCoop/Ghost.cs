@@ -7,7 +7,8 @@ namespace EggCoop
     // driven by snapshots ~100 ms in the past.
     public class Ghost
     {
-        const float Delay = 0.1f, SnapDistance = 8f;
+        const float SnapDistance = 8f;
+        public static float Delay = 0.1f;   // render this far in the past so there is always a next snapshot
 
         public string Nick = "";
         public float LastSeen;

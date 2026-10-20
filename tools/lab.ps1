@@ -3,13 +3,13 @@
 #   .\tools\lab.ps1 down    - stop both copies (by saved PID only)
 #   .\tools\lab.ps1 log     - tail both BepInEx logs
 #   .\tools\lab.ps1 pack    - build dist/EggCoop-<ver>.zip for friends
-param([ValidateSet("up", "down", "log", "pack")] [string]$cmd = "up", [string]$extra = "dev")
+param([ValidateSet("up", "down", "log", "pack")] [string]$cmd = "up", [string]$extra = "dev", [string]$join = "127.0.0.1:7788")
 $root = Split-Path $PSScriptRoot
 $pids = "$root\lab\pids.txt"
 
 function Start-Copy($n, $coopArgs) {
     $dir = "$root\lab\p$n"
-    Remove-Item "$dir\BepInEx\coop-shots", "$dir\BepInEx\LogOutput.log", "$dir\BepInEx\coop-probe.txt" -Recurse -ErrorAction SilentlyContinue
+    Remove-Item "$dir\BepInEx\coop-shots", "$dir\BepInEx\LogOutput.log", "$dir\BepInEx\coop-probe.txt", "$dir\BepInEx\coop-delay.txt" -Recurse -ErrorAction SilentlyContinue
     $a = "-screen-fullscreen 0 -screen-width 960 -screen-height 540 $extra $coopArgs -coop-shot 10 -coop-lab -coop-data `"$dir\userdata`""
     $p = Start-Process "$dir\Egging On.exe" -ArgumentList $a -WorkingDirectory $dir -PassThru
     Add-Content $pids $p.Id
@@ -27,7 +27,7 @@ switch ($cmd) {
         dotnet build "$root\src\EggCoop" -c Lab -p:Deploy=true | Select-String "error|Build succeeded|успешно"
         Remove-Item $pids -ErrorAction SilentlyContinue
         Start-Copy 1 "-coop-nick Host -coop-host"
-        Start-Copy 2 "-coop-nick Guest -coop-join 127.0.0.1:7788"
+        Start-Copy 2 "-coop-nick Guest -coop-join $join"
     }
     "down" {
         if (Test-Path $pids) { Get-Content $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Remove-Item $pids }

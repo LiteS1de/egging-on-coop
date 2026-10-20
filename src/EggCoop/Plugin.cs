@@ -10,7 +10,7 @@ namespace EggCoop
     public class CoopConfig
     {
         public ConfigEntry<string> Nick, SignalUrl, StunServers, LastJoin;
-        public ConfigEntry<int> Port;
+        public ConfigEntry<int> Port, GhostDelayMs;
         public ConfigEntry<KeyCode> MenuKey;
     }
 
@@ -39,6 +39,8 @@ namespace EggCoop
             cfg.SignalUrl = Config.Bind("Network", "SignalUrl", "https://ntfy.sh", "ntfy-сервер для пробивки NAT");
             cfg.StunServers = Config.Bind("Network", "StunServers", "stun.l.google.com:19302,stun.cloudflare.com:3478", "STUN-серверы через запятую");
             cfg.LastJoin = Config.Bind("Network", "LastJoin", "", "Последний код или IP");
+            cfg.GhostDelayMs = Config.Bind("Network", "GhostDelayMs", 100, "Насколько призраки отстают ради плавности (мс). Больше — плавнее на плохой сети");
+            Ghost.Delay = cfg.GhostDelayMs.Value / 1000f;
             joinText = cfg.LastJoin.Value;
             net = new CoopNet(this, cfg);
             net.OnState += (id, s) => pending[id] = s;
@@ -99,6 +101,13 @@ namespace EggCoop
             if (inGame && World.instance.GetEgg().IsInput()) lastInput = Time.unscaledTime;
             if (Time.unscaledTime < nextLabStep) return;
             nextLabStep = Time.unscaledTime + 3f;
+            // tools/net_sweep.py changes the ghost delay live through this file.
+            var delayFile = System.IO.Path.Combine(Paths.BepInExRootPath, "coop-delay.txt");
+            if (System.IO.File.Exists(delayFile) && int.TryParse(System.IO.File.ReadAllText(delayFile).Trim(), out var ms) && ms / 1000f != Ghost.Delay)
+            {
+                Ghost.Delay = ms / 1000f;
+                Log.LogInfo($"Lab: ghost delay {ms} ms");
+            }
             if (Screen.fullScreenMode != FullScreenMode.Windowed || Screen.width != 960)
                 Screen.SetResolution(960, 540, FullScreenMode.Windowed);
             var title = inGame ? null : FindObjectOfType<TitleScreen>();
@@ -109,6 +118,8 @@ namespace EggCoop
             // Lab builds only (-c Lab): a release must never move an egg the player left alone.
             if (inGame && net.IsHost && Time.unscaledTime - lastInput > 15f && !World.instance.GetEggCore().yolkState)
                 World.instance.GetEggCore().eggRigidbody.AddForce(Quaternion.Euler(0, Random.Range(0, 360), 0) * new Vector3(0, 3f, 4f), ForceMode.VelocityChange);
+            // The game pauses itself after 5 min with no buttons pressed (EggController.afkTimeout); long lab runs must not.
+            if (inGame) HarmonyLib.AccessTools.Field(typeof(EggController), "afkTimeout").SetValue(World.instance.GetEgg(), 0f);
 #endif
         }
 

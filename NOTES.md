@@ -44,6 +44,22 @@ Star topology: host relays between guests. Radmin/VPN = always-works fallback (d
   - The owner's PC runs a VPN: STUN address ≠ router WAN address. Code prefers the UPnP address and warns.
   - `dev` launch arg skips saving and starts at a dev marker; good for lab runs.
 
+## Bad-network sweep (2026-10-21, tools/net_sweep.py, coop-anything chaos relay host←→guest)
+Moving-egg samples only; error = ghost vs real egg at best-fit lag.
+
+| profile | delay 50 | delay 100 | delay 200 | delay 300 |
+|---|---|---|---|---|
+| lan | 2.2 cm / p95 7 / freeze 4% | 2.2 / 7 / 3% | 1.9 / 7 / 6% | 1.8 / 6 / 3% |
+| good_wifi | 2.2 / 8 / 2% | 1.8 / 6 / 2% | 1.7 / 6 / 1% | 1.4 / 4 / 1% |
+| bad_wifi | 2.3 / 10 / 3% | 2.0 / 7 / 5% | 1.9 / 5 / 4% | 2.5 / 8 / 3% |
+| mobile_tether | 3.4 / 12 / 2% | 2.8 / 9 / 1% | 3.3 / 11 / 6% | 2.5 / 9 / 0% |
+| transatlantic | 2.3 / 10 / 2% | 1.7 / 7 / 2% | 1.6 / 5 / 3% | 1.4 / 5 / 3% |
+| hell | 7.2 / 24 / 39% | 6.2 / 22 / 18% | 4.8 / 17 / 9% | 8.5 / 28 / 9% |
+
+Decision: default GhostDelayMs = 100 (realistic links all ≤3 cm mean, ≤2–5% freeze). 200 for very bad links (config).
+Receive-time stamping is good enough; sender timestamps + clock offset not needed (revisit only if real play shows judder).
+Lesson: the game auto-pauses after 5 min of no buttons while the egg rests (EggController.afkTimeout) — lab build resets it.
+
 ## Release checklist (before sending a zip to friends)
 - [ ] Build with `tools/lab.ps1 pack` only (Release). It must not contain the lab auto-shove:
       `ilspycmd -t EggCoop.Plugin <zip>/BepInEx/plugins/EggCoop/EggCoop.dll | Select-String AddForce` → 0 hits.
