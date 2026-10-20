@@ -76,8 +76,10 @@ Lesson: the game auto-pauses after 5 min of no buttons while the egg rests (EggC
 - PASS: collide on → contacts logged ("Lab hit friend"), dropping on the friend's head pushes you off (0.7–2.5 m).
   You cannot balance on a friend: both are eggs, you slide off.
 - PASS: crack off → zero cracks caused by the friend (all cracks in the runs were planks/boxes of the henhouse).
-- NOT VERIFIED: crack on at ≥16 m/s (crack threshold). In the cramped henhouse start, test impacts on the friend
-  reached only 12.6 m/s. Check by hand in an open area.
+- PASS (by hand, owner, open area, CrackOnHit on): host fell onto the guest — host log "SemiCrack after hitting
+  collider(friend) at 23.1 m/s". On the guest's side the falling host's ghost hit at 35.4 m/s and the guest did NOT
+  crack: the game only damages an egg that moves into something (its own fall/air state), not one that gets hit.
+  Owner accepted this: the faller cracks, the one standing does not.
 
 ## Lab incident (2026-10-21) — real saves overwritten, restored
 - Two copies (~7.7 GB private each) exhausted 16 GB RAM, the PC crashed. On the next run one copy started WITHOUT

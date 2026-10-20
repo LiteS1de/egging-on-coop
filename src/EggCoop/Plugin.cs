@@ -79,6 +79,7 @@ namespace EggCoop
 #if LAB
                 else if (a[i] == "-coop-noshove") noShove = true;
                 else if (a[i] == "-coop-standtest") { standTest = true; PatchCrackLog(); }
+                else if (a[i] == "-coop-hitlog") PatchCrackLog();   // log friend hits and what caused each crack
 #endif
             }
         }
