@@ -117,7 +117,10 @@ namespace EggCoop
             // but only while nobody plays it: a person at the keyboard wins.
             // Lab builds only (-c Lab): a release must never move an egg the player left alone.
             if (inGame && net.IsHost && Time.unscaledTime - lastInput > 15f && !World.instance.GetEggCore().yolkState)
+            {
                 World.instance.GetEggCore().eggRigidbody.AddForce(Quaternion.Euler(0, Random.Range(0, 360), 0) * new Vector3(0, 3f, 4f), ForceMode.VelocityChange);
+                // The game autosaves only once the player has pressed a movement key; the shove stands in for that.
+                if (!Persistent.instance.saveData.eggMoved) { Persistent.instance.saveData.eggMoved = true; Persistent.instance.ConstantAutoSave(); }            }
             // The game pauses itself after 5 min with no buttons pressed (EggController.afkTimeout); long lab runs must not.
             if (inGame) HarmonyLib.AccessTools.Field(typeof(EggController), "afkTimeout").SetValue(World.instance.GetEgg(), 0f);
 #endif

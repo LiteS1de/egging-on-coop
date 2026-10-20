@@ -60,6 +60,13 @@ Decision: default GhostDelayMs = 100 (realistic links all ≤3 cm mean, ≤2–5
 Receive-time stamping is good enough; sender timestamps + clock offset not needed (revisit only if real play shows judder).
 Lesson: the game auto-pauses after 5 min of no buttons while the egg rests (EggController.afkTimeout) — lab build resets it.
 
+## Saves with the mod (2026-10-21, lab p1 without `dev`)
+- PASS: played 60 s, closed the window normally (WM_CLOSE = Alt+F4 / "Save & Quit"), relaunched → egg at the exact last position (0.00 m).
+- The shipped build has `constantAutoSave = false`. The game saves on quit, at SaveTrigger zones (≤ once/min),
+  on a full crack, achievements and narrator choices. A killed process (Task Manager, crash) loses play since the
+  last of those — vanilla behaviour, not the mod.
+- Autosave also waits for the first real movement key (`saveData.eggMoved`); the lab shove sets it.
+
 ## Release checklist (before sending a zip to friends)
 - [ ] Build with `tools/lab.ps1 pack` only (Release). It must not contain the lab auto-shove:
       `ilspycmd -t EggCoop.Plugin <zip>/BepInEx/plugins/EggCoop/EggCoop.dll | Select-String AddForce` → 0 hits.
