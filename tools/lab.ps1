@@ -24,7 +24,7 @@ function Start-Copy($n, $coopArgs) {
 
 switch ($cmd) {
     "up" {
-        dotnet build "$root\src\EggCoop" -c Release -p:Deploy=true | Select-String "error|Build succeeded|успешно"
+        dotnet build "$root\src\EggCoop" -c Lab -p:Deploy=true | Select-String "error|Build succeeded|успешно"
         Remove-Item $pids -ErrorAction SilentlyContinue
         Start-Copy 1 "-coop-nick Host -coop-host"
         Start-Copy 2 "-coop-nick Guest -coop-join 127.0.0.1:7788"

@@ -8,6 +8,8 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">$(MSBuildThisFileDirectory)..\..\lab\p1</GameDir>
     <Managed>$(GameDir)\Egging On_Data\Managed</Managed>
+    <!-- -c Lab: test-only behaviour (auto-shoving the host egg). tools/lab.ps1 pack builds Release without it. -->
+    <DefineConstants Condition="'$(Configuration)' == 'Lab'">$(DefineConstants);LAB</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

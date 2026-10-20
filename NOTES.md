@@ -44,6 +44,12 @@ Star topology: host relays between guests. Radmin/VPN = always-works fallback (d
   - The owner's PC runs a VPN: STUN address ≠ router WAN address. Code prefers the UPnP address and warns.
   - `dev` launch arg skips saving and starts at a dev marker; good for lab runs.
 
+## Release checklist (before sending a zip to friends)
+- [ ] Build with `tools/lab.ps1 pack` only (Release). It must not contain the lab auto-shove:
+      `ilspycmd -t EggCoop.Plugin <zip>/BepInEx/plugins/EggCoop/EggCoop.dll | Select-String AddForce` → 0 hits.
+      Owner's rule: a host who steps away must never find their egg moved by the mod.
+- [ ] When the mod is finished: delete the `#if LAB` shove block from Plugin.cs entirely.
+
 ## References
 - vendor/coop-anything: playbook/how-coop-mods-work.md, networking.md, multi-instance-testing.md, games/tainted-grail-the-fall-of-avalon/NOTES.md
 - vendor/universal-modder: skills/mod-any-game/references/engines/unity.md, knowledge/games/tunic/seamless-coop-bepinex6-native-hooks.md
