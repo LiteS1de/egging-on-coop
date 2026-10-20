@@ -1,0 +1,9 @@
+# game copies, decompiled game code, third-party clones, downloads and private stuff never go in git
+lab/
+decomp/
+vendor/
+downloads/
+backups/
+dist/
+bin/
+obj/
