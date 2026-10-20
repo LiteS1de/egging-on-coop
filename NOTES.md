@@ -32,6 +32,18 @@ Model after github.com/Karimov-Akbar/sa-coop (src/common/api/nat-traversal, src/
 5. Symmetric NAT / CGNAT on both sides → TURN relay (metered.ca free or own), opt-in in config.
 Star topology: host relays between guests. Radmin/VPN = always-works fallback (direct IP field stays).
 
+## Stage 1 results (2026-10-21) — verified on one PC, two lab copies
+- Game version on title screen: 0.1.8654.
+- PASS: direct IP join, invite-code join (resolved via LAN discovery), ghost follows: lag 140 ms, mean error 0.01 m, worst 0.13 m (tools/compare_probe.py).
+- NOT verified: real internet join (STUN + ntfy hole punch) — needs a friend on another network; F9 menu by hand; Rewired keyboard block while typing; skin swap on ghost with a different skin.
+- Lessons:
+  - The game destroys BepInEx's manager object → `HideManagerGameObject = true` in BepInEx.cfg (shipped in the zip).
+  - Editing app.info only moves Player.log; settings.prefs/controls.bin/saves still go to the real LocalLow folder.
+    Real isolation = Harmony postfix on `Application.get_persistentDataPath` (`-coop-data <dir>`), fail-closed kill.
+  - Russian locale writes floats with commas: use invariant formatting in any text output.
+  - The owner's PC runs a VPN: STUN address ≠ router WAN address. Code prefers the UPnP address and warns.
+  - `dev` launch arg skips saving and starts at a dev marker; good for lab runs.
+
 ## References
 - vendor/coop-anything: playbook/how-coop-mods-work.md, networking.md, multi-instance-testing.md, games/tainted-grail-the-fall-of-avalon/NOTES.md
 - vendor/universal-modder: skills/mod-any-game/references/engines/unity.md, knowledge/games/tunic/seamless-coop-bepinex6-native-hooks.md
