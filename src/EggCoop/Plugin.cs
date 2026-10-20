@@ -92,17 +92,20 @@ namespace EggCoop
 
         // "-coop-lab": keep the copy in a small window and press Continue on the title screen.
         bool lab;
-        float nextLabStep;
+        float nextLabStep, lastInput = -100f;
         void LabStep(bool inGame)
         {
-            if (!lab || Time.unscaledTime < nextLabStep) return;
+            if (!lab) return;
+            if (inGame && World.instance.GetEgg().IsInput()) lastInput = Time.unscaledTime;
+            if (Time.unscaledTime < nextLabStep) return;
             nextLabStep = Time.unscaledTime + 3f;
             if (Screen.fullScreenMode != FullScreenMode.Windowed || Screen.width != 960)
                 Screen.SetResolution(960, 540, FullScreenMode.Windowed);
             var title = inGame ? null : FindObjectOfType<TitleScreen>();
             if (title != null && TitleScreen.menuInitialized) { Log.LogInfo("Lab: Continue"); title.Continue(); nextLabStep += 10f; }
-            // The host's egg gets a shove now and then, so the guest has a moving target to follow.
-            if (inGame && net.IsHost && !World.instance.GetEggCore().yolkState)
+            // The host's egg gets a shove now and then, so the guest has a moving target to follow,
+            // but only while nobody plays it: a person at the keyboard wins.
+            if (inGame && net.IsHost && Time.unscaledTime - lastInput > 15f && !World.instance.GetEggCore().yolkState)
                 World.instance.GetEggCore().eggRigidbody.AddForce(Quaternion.Euler(0, Random.Range(0, 360), 0) * new Vector3(0, 3f, 4f), ForceMode.VelocityChange);
         }
 
