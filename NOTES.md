@@ -90,6 +90,27 @@ Lesson: the game auto-pauses after 5 min of no buttons while the egg rests (EggC
   needs 5 GB free RAM per copy, snapshots + verifies the real save folder each run and auto-restores on change.
 - Lab copies run the game's Steam Deck low preset + texture mip limit 3: ~4.5 GB private each.
 
+## First real session (2026-10-22, 3 players, full game in ~4 h, collide + crack on) → 0.3.0
+Owner's report and what 0.3.0 does about it:
+- Invite code never worked; direct IP over Radmin did (80–140 ms). Host log showed connects + timeouts only;
+  guest logs missing. Host runs a VPN (STUN ≠ router IP) → suspected asymmetric routing. 0.3: F9 lists the host's
+  join addresses (Radmin first, Hyper-V/fake-IP tunnels filtered), louder VPN warning, host logs every join request.
+  NEXT: get a guest's LogOutput.log from a failed code join.
+- Invisible friend egg (name visible). ROOT CAUSE: after a full crack the new shell's shards are scaled to 0 and
+  grow back (EggShell.FadeOut / show curve); a ghost built in that window copied scale 0. Also the sender stopped
+  sending while cracked (core inactive) → ghost timed out after 5 s and was rebuilt, often in that window.
+  Fix: ghost copies shards at their rest pose (originalLocalPositions/Rotation/Scale); a cracked player keeps
+  sending (yolk ghost), and viewers no longer hide ghosts while they themselves are cracked.
+- Teleport kicked the friend or yourself. Fix: teleport lands on the friend's spot, both sides pause collisions
+  (tpSeq in state) until the eggs are 1.3 m apart; all ghost contacts get ≤1 cm penetration and a capped impulse
+  (Physics.ContactModifyEvent) so a kinematic ghost can push but never fling. Lab: 6/6 teleports, victim 0.0 m/s.
+- Pots jammed / flew. Partly ours: ghost colliders pushed our world's props. Fix: ghost collider
+  excludeLayers = everything but the Egg layer. The rest (each world's pots move on their own) is stage 4.
+- Teleport hotkey (T, rebindable; picker by digit for 2+ friends), toasts explaining refusals, F9 locks camera
+  (Rewired mouse off), restyled scrollable F9, teleport counters (persisted in eggcoop.cfg [Stats], others' totals
+  in the state packet), summary on the end credits (EndCredits.Play postfix).
+- Lab now tests from a saved spot (`lab.ps1 up -extra ""`, owner rolled both eggs out of the henhouse).
+
 ## Release checklist (before sending a zip to friends)
 - [ ] Build with `tools/lab.ps1 pack` only (Release). It must not contain the lab auto-shove:
       `ilspycmd -t EggCoop.Plugin <zip>/BepInEx/plugins/EggCoop/EggCoop.dll | Select-String AddForce` → 0 hits.

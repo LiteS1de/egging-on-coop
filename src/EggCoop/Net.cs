@@ -21,13 +21,15 @@ namespace EggCoop
         public bool yolk;
         public int skin;
         public string nick;
+        public byte tpSeq;      // bumps on every teleport: receivers snap instead of sweeping and pause collisions
+        public ushort tpTotal;  // shown on everyone's scoreboard
     }
 
     // Star topology: guests talk only to the host, the host relays every guest's state to the others.
     // Connection setup follows sa-coop: UPnP -> STUN -> invite code -> UDP hole punch via ntfy -> (VPN / direct IP fallback).
     public class CoopNet : INetEventListener
     {
-        public const string ConnectKey = "EggCoop/0.2";   // also a version check: different mod versions refuse each other
+        public const string ConnectKey = "EggCoop/0.3";   // also a version check: different mod versions refuse each other
         public const int MaxPlayers = 4;
         const byte MsgState = 1, MsgLeave = 2, MsgSettings = 3;
         static readonly byte[] Punch = Encoding.ASCII.GetBytes("EGGPUNCH");
@@ -37,11 +39,13 @@ namespace EggCoop
         public bool IsHost { get; private set; }
         public bool Active => manager != null;
         public string Code { get; private set; }
+        public bool VpnSuspected { get; private set; }   // STUN and the router disagree on our public IP: replies may leave through a VPN
         public int PlayerCount => IsHost ? manager.ConnectedPeersCount + 1 : (hostPeer != null ? remoteIds.Count + 1 : 0);
         public event Action<int, EggState> OnState;
         public event Action<int> OnLeave;
         public event Action<bool, bool> OnSettings;   // (collide, crackOnHit) chosen by the host
         public readonly List<string> Log = new List<string>();
+        public readonly Dictionary<int, int> Ping = new Dictionary<int, int>();   // player id -> ms (host: every guest; guest: only the host, id 0)
 
         readonly MonoBehaviour runner;
         readonly CoopConfig cfg;
@@ -103,7 +107,8 @@ namespace EggCoop
             if (manager == null) yield break;
 
             IPEndPoint pub;
-            if (mapped != null && upnpIp != null && !mapped.Address.Equals(upnpIp))
+            VpnSuspected = mapped != null && upnpIp != null && !mapped.Address.Equals(upnpIp);
+            if (VpnSuspected)
                 Say($"Внимание: STUN видит {mapped.Address}, роутер — {upnpIp}. Включён VPN? Друзьям нужен адрес роутера.");
             // The router's WAN address is where UPnP opened the port, so it wins over what STUN saw.
             if (upnpIp != null && !IsPrivate(upnpIp)) pub = new IPEndPoint(upnpIp, port);
@@ -271,7 +276,7 @@ namespace EggCoop
             writer.Put(MsgState); writer.Put((byte)id);
             writer.Put(s.pos.x); writer.Put(s.pos.y); writer.Put(s.pos.z);
             writer.Put(s.rot.x); writer.Put(s.rot.y); writer.Put(s.rot.z); writer.Put(s.rot.w);
-            writer.Put(s.yolk); writer.Put(s.skin); writer.Put(s.nick ?? "", 24);
+            writer.Put(s.yolk); writer.Put(s.skin); writer.Put(s.nick ?? "", 24); writer.Put(s.tpSeq); writer.Put(s.tpTotal);
         }
 
         public void Stop()
@@ -282,6 +287,7 @@ namespace EggCoop
             hostPeer = null;
             Code = null;
             punchTargets.Clear();
+            Ping.Clear();
             foreach (var id in remoteIds.ToList()) OnLeave?.Invoke(id);
             remoteIds.Clear();
             var dev = upnpDevice; upnpDevice = null;
@@ -293,6 +299,7 @@ namespace EggCoop
 
         public void OnConnectionRequest(ConnectionRequest request)
         {
+            Say($"Запрос на вход от {request.RemoteEndPoint}");
             if (!IsHost || manager.ConnectedPeersCount >= MaxPlayers - 1) { request.Reject(); return; }
             if (request.AcceptIfKey(ConnectKey) == null) Say($"Отклонён {request.RemoteEndPoint}: другая версия мода");
         }
@@ -335,7 +342,7 @@ namespace EggCoop
             {
                 pos = new Vector3(r.GetFloat(), r.GetFloat(), r.GetFloat()),
                 rot = new Quaternion(r.GetFloat(), r.GetFloat(), r.GetFloat(), r.GetFloat()),
-                yolk = r.GetBool(), skin = r.GetInt(), nick = r.GetString(24),
+                yolk = r.GetBool(), skin = r.GetInt(), nick = r.GetString(24), tpSeq = r.GetByte(), tpTotal = r.GetUShort(),
             };
             r.Recycle();
             if (IsHost)
@@ -357,7 +364,7 @@ namespace EggCoop
         }
 
         public void OnNetworkError(IPEndPoint ep, SocketError e) => Say($"Ошибка сети {ep}: {e}");
-        public void OnNetworkLatencyUpdate(NetPeer peer, int latency) { }
+        public void OnNetworkLatencyUpdate(NetPeer peer, int latency) => Ping[IsHost ? peer.Id + 1 : 0] = latency;
 
         // ---------------------------------------------------------------- helpers
 

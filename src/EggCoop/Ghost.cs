@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using UnityEngine;
 
 namespace EggCoop
@@ -9,12 +10,17 @@ namespace EggCoop
     public class Ghost
     {
         const float SnapDistance = 8f;
+        const float ApartDistance = 1.3f;   // egg centres further apart than this cannot overlap (eggs are < 0.9 m)
+        const float MaxPenetration = 0.01f;
         public static float Delay = 0.1f;   // render this far in the past so there is always a next snapshot
         public static bool Collide = true, CrackOnHit;   // the host's choice, see CoopNet.OnSettings
 
         public string Nick = "";
         public float LastSeen;
+        public ushort TpTotal;
         public Vector3 Position => root.transform.position;
+        public bool Yolk => yolkNow;
+        public bool Fresh => Time.unscaledTime - LastSeen < 1f;
 
         readonly GameObject root, shell, yolk;
         readonly Rigidbody body;
@@ -22,11 +28,14 @@ namespace EggCoop
         readonly List<Renderer> shellRenderers = new List<Renderer>();
         readonly List<(float t, EggState s)> buffer = new List<(float, EggState)>();
         int skin = int.MinValue;
-        bool yolkNow, snapped = true;
+        bool yolkNow, snapped = true, hasSeq;
+        byte tpSeq;
+        float collideAfter;
         Material localSkinMaterial;
 
-        public static bool CanBuild => World.instance != null && World.instance.GetEgg() != null
-            && World.instance.GetEggCore() != null && !World.instance.GetEggCore().yolkState;
+        // Our shell must exist and not be the one flying apart after a full crack (that one is replaced shortly).
+        public static bool CanBuild => World.instance != null && World.instance.GetEgg() != null && World.instance.GetEggCore() != null
+            && World.instance.GetEgg().GetShell() != null && !World.instance.GetEgg().GetShell().cracking;
 
         public Ghost(int id)
         {
@@ -35,18 +44,30 @@ namespace EggCoop
             shell = new GameObject("shell");
             shell.transform.SetParent(root.transform, false);
 
-            // Copy every visible mesh of the local shell, positioned relative to the egg body.
+            // Copy every visible mesh of the local shell, positioned relative to the egg body. Shards use their
+            // resting pose: right after a rebuild they are scaled to 0 and grow back, and a copy taken then was invisible.
             var core = World.instance.GetEggCore();
             var ct = core.transform;
-            foreach (var mr in World.instance.GetEgg().GetShell().GetComponentsInChildren<MeshRenderer>())
+            var eggShell = World.instance.GetEgg().GetShell();
+            var restPos = HarmonyLib.AccessTools.Field(typeof(EggShell), "originalLocalPositions")?.GetValue(eggShell) as Dictionary<Collider, Vector3>;
+            float restScale = eggShell.GetOriginalScale();
+            var coreFrame = Matrix4x4.TRS(ct.position, ct.rotation, Vector3.one).inverse;
+            foreach (var mr in eggShell.GetComponentsInChildren<MeshRenderer>(true))
             {
                 var mf = mr.GetComponent<MeshFilter>();
                 if (!mr.enabled || mf == null || mf.sharedMesh == null) continue;
+                var shard = mr.GetComponent<Collider>();
+                Matrix4x4 world;
+                if (shard != null && restPos != null && restPos.TryGetValue(shard, out var lp))
+                    world = mr.transform.parent.localToWorldMatrix * Matrix4x4.TRS(lp, eggShell.GetOriginalRotation(shard), Vector3.one * restScale);
+                else if (mr.gameObject.activeInHierarchy) world = mr.transform.localToWorldMatrix;
+                else continue;
+                var m = coreFrame * world;
                 var go = new GameObject(mr.name);
                 go.transform.SetParent(shell.transform, false);
-                go.transform.localPosition = ct.InverseTransformPoint(mr.transform.position);
-                go.transform.localRotation = Quaternion.Inverse(ct.rotation) * mr.transform.rotation;
-                go.transform.localScale = mr.transform.lossyScale;
+                go.transform.localPosition = m.GetColumn(3);
+                go.transform.localRotation = m.rotation;
+                go.transform.localScale = m.lossyScale;
                 go.AddComponent<MeshFilter>().sharedMesh = mf.sharedMesh;
                 var r = go.AddComponent<MeshRenderer>();
                 r.sharedMaterials = mr.sharedMaterials;
@@ -75,9 +96,14 @@ namespace EggCoop
             colGo.transform.localScale = ct.lossyScale;
             colGo.layer = LayerUtility.dynamicLayer;
             col = CopyCollider(core.eggCollider, colGo);
+            col.excludeLayers = ~LayerUtility.eggMask;   // touches only our egg: pots and planks in our world ignore the friend
+            col.hasModifiableContacts = true;
             col.enabled = false;
+            Soften(col.GetInstanceID(), true, core.eggRigidbody.mass);
             root.AddComponent<GhostMover>().ghost = this;
-            Plugin.Log.LogInfo($"Ghost {id} body: {core.eggCollider.GetType().Name} {core.eggCollider.bounds.size}");
+            var size = Vector3.zero;
+            foreach (var r in shellRenderers) size = Vector3.Max(size, r.bounds.size);
+            Plugin.Log.LogInfo(System.FormattableString.Invariant($"Ghost {id} built: {shellRenderers.Count} meshes, largest {size.magnitude:0.00} m"));
         }
 
         static Collider CopyCollider(Collider src, GameObject go)
@@ -95,19 +121,72 @@ namespace EggCoop
             return c;
         }
 
+        // A kinematic ghost cannot be pushed back, so any overlap with our egg used to be resolved by launching our
+        // egg at the engine's depenetration speed (~10 m/s). Contacts with ghosts get a small penetration and a
+        // capped impulse: a friend can still push you and carry you, but never fling you.
+        static volatile HashSet<int> ghostColliders = new HashSet<int>();
+        static float maxImpulse = 0.5f;
+        static bool hooked;
+        static void Soften(int colliderId, bool add, float eggMass = 1f)
+        {
+            var next = new HashSet<int>(ghostColliders);
+            if (add) next.Add(colliderId); else next.Remove(colliderId);
+            ghostColliders = next;
+            maxImpulse = eggMass * 0.5f;   // per contact per physics step: up to 0.5 m/s of push
+            if (!hooked) { Physics.ContactModifyEvent += OnContactModify; hooked = true; }
+        }
+
+        // Runs on a physics worker thread: no Unity API here.
+        static void OnContactModify(PhysicsScene scene, NativeArray<ModifiableContactPair> pairs)
+        {
+            var set = ghostColliders;
+            for (int p = 0; p < pairs.Length; p++)
+            {
+                var pair = pairs[p];
+                if (!set.Contains(pair.colliderInstanceID) && !set.Contains(pair.otherColliderInstanceID)) continue;
+                for (int i = 0; i < pair.contactCount; i++)
+                {
+                    pair.SetMaxImpulse(i, maxImpulse);
+                    if (pair.GetSeparation(i) < -MaxPenetration) pair.SetSeparation(i, -MaxPenetration);
+                }
+            }
+        }
+
         public void Push(EggState s)
         {
             float now = Time.unscaledTime;
             LastSeen = now;
             Nick = s.nick;
-            if (buffer.Count > 0 && (buffer[buffer.Count - 1].s.pos - s.pos).sqrMagnitude > SnapDistance * SnapDistance)
+            TpTotal = s.tpTotal;
+            bool teleported = hasSeq && s.tpSeq != tpSeq;
+            tpSeq = s.tpSeq; hasSeq = true;
+            if (teleported || (buffer.Count > 0 && (buffer[buffer.Count - 1].s.pos - s.pos).sqrMagnitude > SnapDistance * SnapDistance))
             {
                 buffer.Clear();
-                snapped = true;   // teleport: jump there without sweeping through anything on the way
+                snapped = true;   // jump there without sweeping through anything on the way
+                PauseCollisions();
             }
             buffer.Add((now, s));
             if (buffer.Count > 30) buffer.RemoveAt(0);
             if (s.skin != skin) ApplySkin(s.skin);
+        }
+
+        // After a teleport (theirs or ours) the two eggs may overlap: no collisions until they have moved apart.
+        public void PauseCollisions()
+        {
+            col.enabled = false;
+            collideAfter = Time.unscaledTime + 0.5f;
+        }
+
+        // Speed of the friend from the two newest snapshots, m/s.
+        public float Speed
+        {
+            get
+            {
+                if (buffer.Count < 2) return 0f;
+                var a = buffer[buffer.Count - 2]; var b = buffer[buffer.Count - 1];
+                return (b.s.pos - a.s.pos).magnitude / Mathf.Max(b.t - a.t, 0.01f);
+            }
         }
 
         // Interpolated state at render time t (unscaled seconds).
@@ -144,16 +223,13 @@ namespace EggCoop
             yolk.SetActive(yolkNow);
 
             // Collide only with an intact friend, only if the host allows it, and never switch the collider on while it
-            // overlaps our egg (spawn points, teleports): the depenetration kick would launch us.
+            // may overlap our egg (spawn points, teleports): even softened, starting inside each other looks wrong.
             bool want = Collide && !yolkNow;
             if (!want) col.enabled = false;
-            else if (!col.enabled)
+            else if (!col.enabled && Time.unscaledTime >= collideAfter)
             {
-                var mine = World.instance != null ? World.instance.GetEggCore() : null;
-                // (a disabled collider reports empty bounds, so compare distance against two egg sizes instead)
-                if (mine == null || mine.yolkState
-                    || (mine.eggRigidbody.position - body.position).magnitude > 2f * mine.eggCollider.bounds.extents.magnitude)
-                    col.enabled = true;
+                var egg = World.instance != null ? World.instance.GetEgg() : null;
+                if (egg == null || (egg.GetPosition() - body.position).magnitude > ApartDistance) col.enabled = true;
             }
             // The game's own "FallCancel" tag caps impact damage below the crack threshold.
             string tag = CrackOnHit ? "Untagged" : "FallCancel";
@@ -163,7 +239,11 @@ namespace EggCoop
             if (idx > 0) buffer.RemoveRange(0, idx);   // keep a little history behind the render time
         }
 
-        public void Destroy() => Object.Destroy(root);
+        public void Destroy()
+        {
+            Soften(col.GetInstanceID(), false);
+            Object.Destroy(root);
+        }
 
         // Our copied meshes carry the LOCAL player's skin material; swap it for the friend's.
         void ApplySkin(int id)
