@@ -13,7 +13,7 @@
   <a href="https://github.com/LiteS1de/egging-on-coop/releases"><img src="https://img.shields.io/github/downloads/LiteS1de/egging-on-coop/total?style=flat-square&color=FFA727&label=%D1%81%D0%BA%D0%B0%D1%87%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D0%B9" alt="скачиваний"></a>
   <img src="https://img.shields.io/badge/%D0%B8%D0%B3%D1%80%D0%BE%D0%BA%D0%BE%D0%B2-2%E2%80%934-2b1d12?style=flat-square" alt="2–4 игрока">
   <img src="https://img.shields.io/badge/BepInEx-5.4.23.5-2b1d12?style=flat-square" alt="BepInEx 5.4.23.5">
-  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-2b1d12?style=flat-square&logo=windows" alt="Windows">
+  <img src="https://img.shields.io/badge/Windows-10%20%2F%2011-2b1d12?style=flat-square" alt="Windows">
   <a href="LICENSE"><img src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-MIT-2b1d12?style=flat-square" alt="MIT"></a>
 </p>
 
