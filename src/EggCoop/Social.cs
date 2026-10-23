@@ -10,15 +10,15 @@ namespace EggCoop
     public partial class Plugin
     {
         const byte SEmote = CoopNet.SocialBase, SStats = SEmote + 1, SPing = SEmote + 2, SFall = SEmote + 3, SReset = SEmote + 4;
-        const float EmoteTime = 3.5f, PingTime = 12f, BigFall = 15f;
+        const float EmoteTime = 3.5f, PingTime = 12f, BigFall = 15f, EmoteSize = 56f;
         // Twemoji 15.1 (CC-BY 4.0), embedded as emote.<codepoint>.
-        static readonly string[] EmoteIcons = { "1f44b", "1f44d", "1f602", "1f631", "1f621", "1f64f", "1f480", "1f4cd" };
+        static readonly string[] EmoteIcons = { "1f44b", "1f44d", "1f602", "1f631", "1f621", "1f64f", "1f480", null };   // the last slot is the ping: drawn as its triangle
         static readonly string[] EmoteNames = { "Привет", "Класс!", "Ха-ха", "Ааа!", "Злюсь", "Помогите!", "RIP", "Метка" };
         const int PingIndex = 7;
 
         Texture2D[] emoteTex;
-        Texture2D wheelDisc, wheelSlice, wheelCenter, wheelCenterHot;
-        GUIStyle sBubble, sCap, sCloseX, sHint;
+        Texture2D wheelDisc, wheelSlice, wheelCenter, wheelCenterHot, triTex;
+        GUIStyle sCap, sCloseX, sHint;
         bool wheelOpen, aiming;
         int wheelHover = -1;
         float lastEmoteAt = -10f, nextStats;
@@ -111,22 +111,18 @@ namespace EggCoop
             aiming = false; UpdateCursor();
             var cam = Camera.main;
             if (cam == null || !InGame()) return;
-            // First solid thing under the cursor that is not an egg (ours or a friend's).
-            foreach (var h in Physics.RaycastAll(cam.ScreenPointToRay(screen), 500f, ~0, QueryTriggerInteraction.Ignore).OrderBy(h => h.distance))
-            {
-                if (h.collider.GetComponentInParent<EggCoreData>() != null || h.collider.GetComponentInParent<RawEggController>() != null
-                    || h.collider.transform.root.name.StartsWith("EggCoop_Ghost")) continue;
-                pings[-1] = (h.point, Time.unscaledTime);
-                if (net.Connected)
-                {
-                    var w = net.WorldWriter(); w.Put(SPing); w.Put(h.point.x); w.Put(h.point.y); w.Put(h.point.z);
-                    net.SendWorld(w, DeliveryMethod.ReliableUnordered);
-                }
-                return;
-            }
-            Toast("Туда метку не поставить — кликните по земле или предмету");
+            // First solid thing under the cursor that is not an egg (ours or a friend's). Distant scenery often has no
+            // collider: then the ping floats 30 m out along the view, which still shows the direction.
+            var ray = cam.ScreenPointToRay(screen);
+            var hit = Physics.RaycastAll(ray, 500f, ~0, QueryTriggerInteraction.Ignore).OrderBy(h => h.distance)
+                .FirstOrDefault(h => h.collider.GetComponentInParent<EggCoreData>() == null && h.collider.GetComponentInParent<RawEggController>() == null
+                    && !h.collider.transform.root.name.StartsWith("EggCoop_Ghost"));
+            var at = hit.collider != null ? hit.point : ray.GetPoint(30f);
+            pings[-1] = (at, Time.unscaledTime);
+            if (!net.Connected) return;
+            var w = net.WorldWriter(); w.Put(SPing); w.Put(at.x); w.Put(at.y); w.Put(at.z);
+            net.SendWorld(w, DeliveryMethod.ReliableUnordered);
         }
-
         void ReceiveSocial(int from, NetPacketReader r)
         {
             byte type = r.GetByte();
@@ -168,21 +164,20 @@ namespace EggCoop
 
         // ---------------------------------------------------------------- GUI
 
-        void InitSocialStyles(Font font, Texture2D panel, RectOffset panelBorder)
+        void InitSocialStyles(Font font)
         {
-            emoteTex = EmoteIcons.Select(LoadIcon).ToArray();
+            emoteTex = EmoteIcons.Select(c => c != null ? LoadIcon(c) : null).ToArray();
             wheelDisc = Ring(512, 0.34f, 181f, new Color(0f, 0f, 0f, 0.78f), new Color(1f, 1f, 1f, 0.14f));
             wheelSlice = Ring(512, 0.34f, 180f / EmoteIcons.Length, new Color(1f, 0.655f, 0.153f, 0.32f), new Color(1f, 0.655f, 0.153f, 0.8f));
             wheelCenter = Ring(128, 0f, 181f, new Color(1f, 1f, 1f, 0.08f), new Color(1f, 1f, 1f, 0.2f));
             wheelCenterHot = Ring(128, 0f, 181f, new Color(1f, 0.655f, 0.153f, 0.3f), new Color(1f, 0.655f, 0.153f, 0.8f));
-            sBubble = new GUIStyle { border = panelBorder };
-            sBubble.normal.background = panel;
+            triTex = Triangle(96);
             sCap = new GUIStyle(GUI.skin.label) { font = font, fontSize = 20, alignment = TextAnchor.MiddleCenter };
             sCap.normal.textColor = Orange;
             sCloseX = new GUIStyle(sCap) { fontSize = 34 };
             sCloseX.normal.textColor = Color.white;
             sHint = new GUIStyle(sDim) { alignment = TextAnchor.MiddleCenter, wordWrap = false };
-            Log.LogInfo($"Emotes: {emoteTex.Count(t => t != null)} of {EmoteIcons.Length} icons");
+            Log.LogInfo($"Emotes: {emoteTex.Count(t => t != null)} of {EmoteIcons.Length - 1} icons");
         }
 
         static Texture2D LoadIcon(string codepoint)
@@ -242,11 +237,42 @@ namespace EggCoop
                 float a = i * Mathf.PI * 2f / EmoteIcons.Length, rr = (R + inner) / 2f;
                 float s = Mathf.Min(R * 0.27f, 60f) * (i == wheelHover ? 1.18f : 1f);
                 var p = new Vector2(c.x + Mathf.Sin(a) * rr, c.y - Mathf.Cos(a) * rr);
-                if (emoteTex[i] != null) GUI.DrawTexture(new Rect(p.x - s / 2, p.y - s / 2, s, s), emoteTex[i], ScaleMode.ScaleToFit);
+                if (i == PingIndex) { GUI.color = Color.Lerp(Color.white, PlayerColor(-1), 0.75f); GUI.DrawTexture(new Rect(p.x - s * 0.4f, p.y - s * 0.4f, s * 0.8f, s * 0.8f), triTex); GUI.color = Color.white; }
+                else if (emoteTex[i] != null) GUI.DrawTexture(new Rect(p.x - s / 2, p.y - s / 2, s, s), emoteTex[i], ScaleMode.ScaleToFit);
             }
             GUI.Label(new Rect(c.x - 250, c.y + R + 6, 500, 30), wheelHover >= 0 ? EmoteNames[wheelHover] : "Закрыть", sCap);
             GUI.Label(new Rect(c.x - 250, c.y + R + 36, 500, 22), $"наведите и отпустите {cfg.EmoteKey.Value} · × или Esc — закрыть", sHint);
             if (e.type == EventType.MouseDown && e.button == 0) { if (wheelHover >= 0) FireEmote(wheelHover); else CloseWheel(); e.Use(); }
+        }
+
+        // Each player's colour (by player id, the same on every screen): their ping, its label and their name tag.
+        static readonly Color[] Palette = { new Color(1f, 0.655f, 0.153f), new Color(0.35f, 0.8f, 1f), new Color(0.55f, 0.9f, 0.35f), new Color(1f, 0.45f, 0.7f) };
+        Color PlayerColor(int id) => Palette[((id < 0 ? net.MyId : id) % Palette.Length + Palette.Length) % Palette.Length];
+
+        // White down-pointing triangle with a soft dark rim: the ping marker (tinted per player), also the bubble's tail.
+        static Texture2D Triangle(int n)
+        {
+            var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            // Texture rows grow upward: the tip is at the bottom (low y).
+            var v = new[] { new Vector2(0.08f, 0.86f), new Vector2(0.92f, 0.86f), new Vector2(0.5f, 0.1f) };
+            var px = new Color[n * n];
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    var p = new Vector2((x + 0.5f) / n, (y + 0.5f) / n);
+                    float d = float.MinValue;   // signed distance in pixels, > 0 outside
+                    for (int i = 0; i < 3; i++)
+                    {
+                        Vector2 a = v[i], b = v[(i + 1) % 3], e = (b - a).normalized, nrm = new Vector2(-e.y, e.x);   // outward: the corners go clockwise
+                        d = Mathf.Max(d, Vector2.Dot(p - a, nrm) * n);
+                    }
+                    float rim = n * 0.06f;
+                    var col = Color.Lerp(Color.white, new Color(0.1f, 0.07f, 0.05f), Mathf.Clamp01((d + rim) / 1.5f));
+                    col.a = Mathf.Clamp01(0.5f - d);
+                    px[y * n + x] = col;
+                }
+            t.SetPixels(px); t.Apply();
+            return t;
         }
 
         void DrawSocial()
@@ -254,49 +280,36 @@ namespace EggCoop
             var cam = Camera.main;
             if (cam == null || !InGame() || emoteTex == null) return;
             float now = Time.unscaledTime;
-            Vector3 me = World.instance.GetEgg().GetPosition();
+            // Where our egg is drawn: GetPosition() is the physics pose, which moves in 50 Hz steps, so anything pinned
+            // to it shivers against the smoothly interpolated egg on screen.
+            var core = World.instance.GetEggCore();
+            Vector3 me = core.yolkState ? World.instance.GetEgg().GetRawTransform().position : core.eggRigidbody.transform.position;
             foreach (var kv in bubbles.ToList())
             {
                 float age = now - kv.Value.t0;
                 if (age > EmoteTime) { bubbles.Remove(kv.Key); continue; }
                 Vector3 at;
+                if (kv.Key < 0 && (wheelOpen || labHover >= 0)) continue;   // ours would sit right on the wheel's close button
                 if (kv.Key < 0) at = me;
                 else if (ghosts.TryGetValue(kv.Key, out var g)) at = g.Position;
                 else continue;
-                var sp = cam.WorldToScreenPoint(at + Vector3.up * 1.9f);
+                // Anchored just above the egg (a friend's: above the name tag), in pixels, and always fully on screen:
+                // our own egg sits low and close to the camera, a world-space offset used to throw it off the top.
+                var sp = cam.WorldToScreenPoint(at + Vector3.up * (kv.Key < 0 ? 0.55f : 1.2f));
                 if (sp.z <= 0 || emoteTex[kv.Value.emote] == null) continue;
-                // Pops in with a small overshoot, fades out over the last half second.
-                float pop = age < 0.18f ? Mathf.Sin(age / 0.18f * Mathf.PI * 0.75f) / 0.707f : 1f;
-                float size = Mathf.Clamp(900f / sp.z, 44f, 76f) * Mathf.Max(0.3f, pop);
-                GUI.color = new Color(1, 1, 1, Mathf.Clamp01((EmoteTime - age) * 2f));
-                var box = new Rect(sp.x - size / 2, Screen.height - sp.y - size, size, size);                GUI.Box(box, GUIContent.none, sBubble);
-                GUI.DrawTexture(new Rect(box.x + size * 0.14f, box.y + size * 0.14f, size * 0.72f, size * 0.72f), emoteTex[kv.Value.emote], ScaleMode.ScaleToFit);
-            }
-            foreach (var kv in pings.ToList())
+                // Just the emote, no frame. A fixed size and whole-pixel position: scaling it with the camera distance and
+                // drawing at fractional pixels made it shimmer every frame.
+                float t = Mathf.Clamp01(age / 0.28f) - 1f, pop = 1f + 2.7f * t * t * t + 1.7f * t * t;   // ease-out-back: grows with a small overshoot
+                float size = Mathf.Round(EmoteSize * Mathf.Max(0f, pop));
+                float x = Mathf.Round(Mathf.Clamp(sp.x, size / 2 + 8, Screen.width - size / 2 - 8));
+                float y = Mathf.Round(Mathf.Clamp(Screen.height - sp.y - size - (kv.Key < 0 ? 10f : 26f), 8f, Screen.height - size - 8f));
+                GUI.color = new Color(1, 1, 1, Mathf.Clamp01((EmoteTime - age) * 2.5f));
+                GUI.DrawTexture(new Rect(x - Mathf.Round(size / 2), y, size, size), emoteTex[kv.Value.emote]);
+            }            foreach (var kv in pings.ToList())
             {
                 float age = now - kv.Value.t0;
                 if (age > PingTime) { pings.Remove(kv.Key); continue; }
-                var sp = cam.WorldToScreenPoint(kv.Value.at);
-                // Behind the camera or off screen: pinned to the nearest edge so it can still be found.
-                float x = sp.x, y = Screen.height - sp.y;
-                if (sp.z < 0)
-                {
-                    // Projected through the camera it lands mirrored and anywhere on screen: push it out to the edge on its side.
-                    var d = new Vector2(Screen.width / 2f - x, Screen.height / 2f - y);
-                    if (d.sqrMagnitude < 1f) d = Vector2.up;
-                    d = d.normalized * (Screen.width + Screen.height);
-                    x = Screen.width / 2f + d.x; y = Screen.height / 2f + d.y;
-                }
-                bool edge = sp.z < 0 || x < 30 || x > Screen.width - 30 || y < 60 || y > Screen.height - 30;
-                x = Mathf.Clamp(x, 30, Screen.width - 30); y = Mathf.Clamp(y, 60, Screen.height - 30);
-                GUI.color = new Color(1, 1, 1, Mathf.Clamp01(PingTime - age) * (edge ? 0.75f : 1f));
-                float s = 40f + 8f * Mathf.Max(0f, 1f - age * 3f);   // a short bounce when placed
-                if (emoteTex[PingIndex] != null) GUI.DrawTexture(new Rect(x - s / 2, y - s, s, s), emoteTex[PingIndex], ScaleMode.ScaleToFit);
-                string label = $"{(kv.Key < 0 ? cfg.Nick.Value : NickOf(kv.Key))} · {Vector3.Distance(me, kv.Value.at):0} м";
-                var r = new Rect(x - 120, y + 2, 240, 22);
-                var col = GUI.color;
-                GUI.color = new Color(0, 0, 0, col.a); GUI.Label(new Rect(r.x + 1, r.y + 1, r.width, r.height), label, tag);
-                GUI.color = col; GUI.Label(r, label, tag);
+                DrawPing(cam, kv.Key, kv.Value.at, age, me);
             }
             GUI.color = Color.white;
             if (aiming)
@@ -307,6 +320,43 @@ namespace EggCoop
             }
         }
 
+        // A triangle pointing down at the spot, bobbing, with "nick · 12 м" above. Off screen (or behind us) it sits on
+        // the screen edge and turns into an arrow pointing toward the spot.
+        void DrawPing(Camera cam, int who, Vector3 at, float age, Vector3 me)
+        {
+            var sp = cam.WorldToScreenPoint(at);
+            float x = sp.x, y = Screen.height - sp.y;
+            const float margin = 34f;
+            bool behind = sp.z < 0;
+            if (behind) { x = Screen.width - x; y = Screen.height - y; }   // mirrored through the camera: flip back to its side
+            var c = new Vector2(Screen.width / 2f, Screen.height / 2f);
+            var dir = new Vector2(x, y) - c;
+            bool off = behind || x < margin || x > Screen.width - margin || y < margin + 30 || y > Screen.height - margin;
+            if (off)
+            {
+                if (dir.sqrMagnitude < 1f) dir = Vector2.down;
+                // Slide out along the direction until the point touches the margin box.
+                float sx = (Screen.width / 2f - margin) / Mathf.Max(Mathf.Abs(dir.x), 0.001f), sy = (Screen.height / 2f - margin - 15) / Mathf.Max(Mathf.Abs(dir.y), 0.001f);
+                var p = c + dir * Mathf.Min(sx, sy);
+                x = p.x; y = p.y;
+            }
+            var col = Color.Lerp(Color.white, PlayerColor(who), 0.75f);
+            float alpha = Mathf.Clamp01(PingTime - age) * Mathf.Clamp01(age * 8f);
+            float w = 30f * (1f + 0.35f * Mathf.Max(0f, 1f - age * 4f));   // a little pop when placed
+            var m = GUI.matrix;
+            if (off) GUIUtility.RotateAroundPivot(Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg - 90f, new Vector2(x, y));   // the tip points at the spot
+            float bob = off ? 0f : 5f * Mathf.Abs(Mathf.Sin(age * 3.2f));
+            var tri = new Rect(Mathf.Round(x - w / 2), Mathf.Round(y - w * 0.95f - bob), Mathf.Round(w), Mathf.Round(w));   // tip (bottom of the texture) on the spot, whole pixels
+            GUI.color = new Color(0, 0, 0, alpha * 0.45f); GUI.DrawTexture(new Rect(tri.x + 2, tri.y + 3, w, w), triTex);
+            GUI.color = new Color(col.r, col.g, col.b, alpha); GUI.DrawTexture(tri, triTex);
+            GUI.matrix = m;
+            string label = $"{(who < 0 ? cfg.Nick.Value : NickOf(who))} · {Vector3.Distance(me, at):0} м";
+            var r = off ? new Rect(Mathf.Clamp(x - 120, 4, Screen.width - 244), Mathf.Clamp(y + 18, 4, Screen.height - 26), 240, 22)
+                        : new Rect(x - 120, y - w - bob - 24, 240, 22);
+            GUI.color = new Color(0, 0, 0, alpha * 0.8f); GUI.Label(new Rect(r.x + 1, r.y + 1, r.width, r.height), label, tag);
+            GUI.color = new Color(col.r, col.g, col.b, alpha); GUI.Label(r, label, tag);
+            GUI.color = Color.white;
+        }
         // "Доска позора", worst first: most height lost.
         List<string> ShameLines()
         {

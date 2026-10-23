@@ -19,7 +19,7 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public partial class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.5.0";
+        public const string Version = "0.5.1";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -231,13 +231,15 @@ namespace EggCoop
                     break;
                 case 1:
                     labHover = -1;
-                    PlacePing(new Vector2(Screen.width / 2f, Screen.height / 2f));   // what the ping key does
+                    PlacePing(new Vector2(Screen.width * 0.72f, Screen.height * 0.55f));   // like the ping key, off-centre so it does not cover the emote
+                    if (cam != null) pings[2] = (egg + cam.transform.right * 40f + cam.transform.forward * 10f, Time.unscaledTime);   // a friend's, off to the right
                     Log.LogInfo($"Lab ping: {(pings.TryGetValue(-1, out var p) ? p.at.ToString() : "none")} egg={egg} cam={(cam != null ? cam.transform.position.ToString() : "-")}");
                     bubbles[-1] = (6, Time.unscaledTime);
                     break;
                 case 2:
                     labHover = 7;
                     if (cam != null) pings[-1] = (egg - cam.transform.forward * 8f, Time.unscaledTime);   // behind the camera: pinned to the edge
+                    if (cam != null) pings[2] = (egg + cam.transform.right * 40f + cam.transform.forward * 10f, Time.unscaledTime);   // a friend's, off to the right
                     break;
                 case 3:
                     labHover = -1; SetMenu(true);
@@ -835,7 +837,7 @@ namespace EggCoop
             GUI.skin.verticalScrollbarThumb.border = thumbBorder; GUI.skin.verticalScrollbarThumb.fixedWidth = 8;
             GUI.skin.verticalScrollbarUpButton.fixedHeight = GUI.skin.verticalScrollbarDownButton.fixedHeight = 0;
             GUI.skin.textField.normal.textColor = GUI.skin.textField.focused.textColor = GUI.skin.textField.hover.textColor = Color.white;
-            InitSocialStyles(font, panel, panelBorder);
+            InitSocialStyles(font);
             Log.LogInfo($"UI styled: font={(font != null ? font.name : "default")} panel={(panel.width > 1)} egg={(eggIcon != null)}");
         }
 
@@ -938,15 +940,17 @@ namespace EggCoop
         {
             var cam = Camera.main;
             if (cam == null || !InGame()) return;
-            foreach (var g in ghosts.Values)
+            foreach (var kv in ghosts)
             {
+                var g = kv.Value;
                 Vector3 sp = cam.WorldToScreenPoint(g.Position + Vector3.up * 1.2f);
                 if (sp.z <= 0) continue;
                 string label = Describe(g);
                 var r = new Rect(sp.x - 160, Screen.height - sp.y - 12, 320, 24);
                 GUI.color = Color.black; GUI.Label(new Rect(r.x + 1, r.y + 1, r.width, r.height), label, tag);
-                GUI.color = Color.white; GUI.Label(r, label, tag);
+                GUI.color = Color.Lerp(Color.white, PlayerColor(kv.Key), 0.6f); GUI.Label(r, label, tag);   // the same colour as their ping
             }
+            GUI.color = Color.white;
         }
 
         void DrawHostToggles()

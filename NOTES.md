@@ -185,3 +185,9 @@ Owner's report and what 0.3.0 does about it:
 - Installer: game found from the unpacked location, Steam libraryfolders.vdf, else a folder dialog; elevates when the folder is not writable (Program Files); waits for the game to close; keeps an existing BepInEx and flips HideManagerGameObject in its cfg; replaces plugins\EggCoop, keeps eggcoop.cfg.
 - PASS (powershell.exe 5.1): fresh / over existing / uninstall on a fake Cyrillic path with spaces, the .bat launchers, vdf parsing, and a real run: lab p1 stripped by uninstall, reinstalled, game loaded BepInEx + EggCoop 0.5.0.
 - NOT TESTED: a real Steam install under Program Files (elevation path), SmartScreen prompt on a downloaded zip.
+
+## 0.5.1 (2026-10-23): ping and emote look (owner's request, after the Flipping is Hard ping)
+- Ping = procedural down-pointing triangle in the player's colour (palette by player id: orange, blue, green, pink; name tags use it too), bobbing, 'nick · N м' above. Off screen / behind the camera it sits on the edge as an arrow pointing at the spot. No hit (scenery without colliders) -> 30 m along the view instead of a toast. The wheel's ping slot shows the triangle.
+- Emotes: no frame, fixed 56 px, whole-pixel position (scaling with camera distance + fractional pixels made the icon shimmer while its frame did not); own egg anchored to its rendered transform (GetPosition() is the 50 Hz physics pose); hidden while the wheel is open (it covered the ×).
+- Protocol unchanged (EggCoop/0.5): 0.5.0 and 0.5.1 play together.
+- PASS (one lab copy, -coop-socialdemo screenshots).
