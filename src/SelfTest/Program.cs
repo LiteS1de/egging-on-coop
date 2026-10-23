@@ -94,5 +94,52 @@ var list = Json.Parse("{\"data\":[{\"id\":\"a\",\"title\":\"Порыв ветр�
 Check(Json.List(list, "data").Count == 2 && Json.Str(list, "data", 0, "title") == "Порыв ветра" && Json.Str(list, "data", 1, "id") == "b", "helix list");
 Check(Json.Parse("{broken") == null && Json.Str(null, "x") == null, "broken input");
 
+// Steam pipe: a real LiteNetLib host and two guests talking only through LoopbackPipe and a lossy in-memory relay
+// (standing in for Valve's relays). Reliable messages must get through both ways, each guest a separate peer.
+{
+    var rnd = new Random(7);
+    var relay = new System.Collections.Generic.Queue<(ulong to, ulong from, byte[] d)>();
+    var hostL = new LiteNetLib.EventBasedNetListener(); var host = new LiteNetLib.NetManager(hostL);
+    hostL.ConnectionRequestEvent += r => r.AcceptIfKey("t");
+    var gotAtHost = new System.Collections.Generic.List<string>();
+    hostL.NetworkReceiveEvent += (p, r, ch, m) => { gotAtHost.Add(r.GetString()); r.Recycle(); };
+    Check(host.Start(0), "host start");
+    var hostPipe = new LoopbackPipe { HostPort = host.LocalPort, Allowed = id => id == 2 || id == 3 };
+    hostPipe.SendRemote = (to, d, len) => { if (rnd.NextDouble() > 0.2) relay.Enqueue((to, 1, d.AsSpan(0, len).ToArray())); };
+    var guests = new System.Collections.Generic.Dictionary<ulong, (LoopbackPipe pipe, LiteNetLib.NetManager net, System.Collections.Generic.List<string> got)>();
+    foreach (ulong id in new ulong[] { 2, 3 })
+    {
+        var l = new LiteNetLib.EventBasedNetListener(); var n = new LiteNetLib.NetManager(l); var inbox = new System.Collections.Generic.List<string>();
+        l.NetworkReceiveEvent += (p, r, ch, m) => { inbox.Add(r.GetString()); r.Recycle(); };
+        var pipe = new LoopbackPipe(); ulong me = id;
+        pipe.SendRemote = (to, d, len) => { if (rnd.NextDouble() > 0.2) relay.Enqueue((to, me, d.AsSpan(0, len).ToArray())); };
+        n.Start(); n.Connect("127.0.0.1", pipe.OpenGuest(1), "t");
+        guests[id] = (pipe, n, inbox);
+    }
+    var stranger = new LoopbackPipe { HostPort = host.LocalPort };
+    void Spin(int ms)
+    {
+        var until = DateTime.UtcNow.AddMilliseconds(ms);
+        while (DateTime.UtcNow < until)
+        {
+            hostPipe.Pump(); foreach (var g in guests.Values) g.pipe.Pump();
+            while (relay.Count > 0) { var (to, from, d) = relay.Dequeue(); if (to == 1) hostPipe.Deliver(from, d, d.Length); else guests[to].pipe.Deliver(from, d, d.Length); }
+            host.PollEvents(); foreach (var g in guests.Values) g.net.PollEvents();
+            System.Threading.Thread.Sleep(5);
+        }
+    }
+    Spin(3000);
+    hostPipe.Deliver(9, new byte[] { 1, 2, 3 }, 3);   // someone outside the lobby
+    Check(host.ConnectedPeersCount == 2, "both guests connected through the pipe: " + host.ConnectedPeersCount);
+    Check(System.Linq.Enumerable.Count(hostPipe.Remotes) == 2, "stranger got no pipe");
+    var w = new LiteNetLib.Utils.NetDataWriter();
+    for (int i = 0; i < 20; i++) { w.Reset(); w.Put("h" + i); host.SendToAll(w, LiteNetLib.DeliveryMethod.ReliableOrdered); }
+    foreach (var g in guests) { w.Reset(); w.Put("g" + g.Key); g.Value.net.FirstPeer.Send(w, LiteNetLib.DeliveryMethod.ReliableOrdered); }
+    Spin(3000);
+    foreach (var g in guests.Values) Check(g.got.Count == 20 && g.got[19] == "h19", "guest got all 20 in order over 20% loss: " + g.got.Count);
+    Check(gotAtHost.Contains("g2") && gotAtHost.Contains("g3"), "host got both guests");
+    host.Stop(); foreach (var g in guests.Values) { g.net.Stop(); g.pipe.Close(null); } hostPipe.Close(null);
+}
+
 Console.WriteLine("code example: " + code);
 Console.WriteLine("ALL OK");

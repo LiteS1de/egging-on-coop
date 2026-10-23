@@ -45,7 +45,8 @@
 - **Viewer effects** for Twitch channel points and bits: wind, hop, moon gravity, slow motion, slippery egg, upside-down camera, teleports and more. Each has its own price, cooldown and switch; the mod creates the channel rewards itself and refunds points when an effect could not run.
 
 **Connecting**
-- Invite code, Radmin VPN or IP. If the internet blinks, a guest reconnects on its own.
+- **Through Steam:** the host invites friends from the Steam overlay, friends click "Join game". Traffic goes through Valve's relays: works behind any router, no Radmin, no port forwarding, nobody's IP is ever shown.
+- Fallbacks: invite code, Radmin VPN or IP. If the internet blinks, a guest reconnects on its own.
 ## Screenshots
 
 <table>

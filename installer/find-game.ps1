@@ -7,7 +7,7 @@ function Get-SteamLibraries {
     $steam = (Get-ItemProperty "HKCU:\Software\Valve\Steam" -ErrorAction SilentlyContinue).SteamPath
     if (-not $steam) { $steam = (Get-ItemProperty "HKLM:\SOFTWARE\WOW6432Node\Valve\Steam" -ErrorAction SilentlyContinue).InstallPath }
     if (-not $steam) { return @() }
-    return @($steam -replace "/", "\") + (Get-VdfPaths (Join-Path $steam "steamapps\libraryfolders.vdf")) | Select-Object -Unique
+    return @($steam -replace "/", "\") + (Get-VdfPaths (Join-Path $steam "steamapps\libraryfolders.vdf")) | Sort-Object -Unique   # case-insensitive: the registry and the vdf spell C:\ differently
 }
 
 function Get-VdfPaths($vdf) {

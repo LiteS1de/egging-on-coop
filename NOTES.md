@@ -205,3 +205,10 @@ Owner's report and what 0.3.0 does about it:
 - Unity's JsonUtility leaves nested objects of plugin classes empty: nested replies go through Json.cs (own reader, SelfTest on Twitch payload shapes).
 - PASS (one lab copy, -coop-twitchtest): real EventSub socket welcome (TLS from Mono OK), real device code request 200, fake redemption -> wind -> fulfill path, duplicate dropped, cheer 'ЛУННАЯ гравитация' 200 -> moon, cheers without a name or too cheap ignored.
 - NOT TESTED: real login, reward creation and redemptions on a live channel (needs the owner's account; channel points need affiliate).
+
+## Steam connection (2026-10-23, in 0.6.0, not released)
+- The game ships Steamworks.NET + Heathen (Steam init by the game, app 2897610). SteamLink.cs: host = CoopNet.Host() + friends-only lobby (data eggcoop=ConnectKey, rich presence connect=+connect_lobby <id>); invites via ActivateGameOverlayInviteDialog; joins via GameLobbyJoinRequested_t, GameRichPresenceJoinRequested_t and the +connect_lobby launch arg. Sessions accepted only from lobby members (host) / the lobby owner (guest).
+- Transport = LoopbackPipe (Pipe.cs) under the unchanged LiteNetLib session: guest LiteNetLib connects to 127.0.0.1:<pipe>; host gets one loopback socket per remote SteamID talking to the real host port. Datagrams go as SteamNetworkingMessages UnreliableNoNagle|AutoRestartBrokenSession on channel 0; LiteNetLib keeps reliability, order, pings, reconnects.
+- PASS: SelfTest pipe = real LiteNetLib host + 2 guests over a 20%-loss in-memory relay: both connect as separate peers, 20 ReliableOrdered messages arrive in order, a non-member gets no pipe. Lab copy: Steam detected, lobby created, F9 shows the invite button (that copy's Steam is an emulator, so nothing crosses PCs there).
+- NOT TESTED: two real Steam accounts on two PCs (invite, join from the friends list, launch by invite).
+- F9 Game tab: one 'Создать игру' (LiteNetLib host + Steam lobby when Steam is up); code/IP/Radmin under 'Другие способы'.

@@ -32,6 +32,8 @@ namespace EggCoop
         readonly Dictionary<int, Ghost> ghosts = new Dictionary<int, Ghost>();
         readonly Dictionary<int, EggState> pending = new Dictionary<int, EggState>();
         CoopNet net;
+        SteamLink steam;
+        bool showOtherWays;
         bool menuOpen;
         float nextSend;
         Rect window = new Rect(40, 40, 500, 0);
@@ -77,6 +79,7 @@ namespace EggCoop
             net.OnSettings += ApplyHostSettings;
             net.OnEnded += Toast;
             net.OnSocial += ReceiveSocial;
+            steam = new SteamLink(net, cfg);
             try { world = new WorldSync(net, harmony); } catch (System.Exception e) { Log.LogError("World sync disabled: " + e); }
             Application.quitting += () => net.Stop();   // tell friends right away instead of letting them time out
             ApplyOwnSettings();
@@ -488,7 +491,7 @@ namespace EggCoop
             if (testMode != null && inGame)
             {
                 Log.LogInfo("Test harness: " + testMode);
-                if (testMode == "host") { ApplyOwnSettings(); net.Host(); } else net.Join(testJoin);
+                if (testMode == "host") { ApplyOwnSettings(); net.Host(); steam.OpenLobby(); } else net.Join(testJoin);
                 testMode = null;
             }
             // Probe for tools/compare_probe.py: wall-clock ms, own egg, every ghost, 10 times a second.
@@ -542,7 +545,9 @@ namespace EggCoop
         {
             Application.runInBackground = true;   // the host must keep sending while alt-tabbed
             if (waitKey == null && Time.frameCount > ignoreKeysFrame) HandleKeys();
+            steam.Tick();   // Steam -> LiteNetLib
             net.Poll();
+            steam.Tick();   // and LiteNetLib's replies straight back out
 
             bool inGame = InGame();
             // Register the world's objects once the level has settled (stabilizers unfreeze bodies ~0.5 s after spawn).
@@ -1054,8 +1059,14 @@ namespace EggCoop
             {
                 GUILayout.Label(("Создать игру").ToUpperInvariant(), sHead);
                 DrawHostToggles();
-                if (GUILayout.Button("Создать игру (порт " + cfg.Port.Value + ")", sBtn)) { ApplyOwnSettings(); net.Host(); }
+                if (GUILayout.Button(steam.Available ? "Создать игру — друзья зайдут через Steam" : "Создать игру (порт " + cfg.Port.Value + ")", sBtn)) { ApplyOwnSettings(); net.Host(); steam.OpenLobby(); }
                 GUILayout.Label(("Подключиться").ToUpperInvariant(), sHead);
+                GUILayout.Label(steam.Available
+                    ? "Через Steam: примите приглашение друга или нажмите «Присоединиться к игре» у него в списке друзей Steam. Адреса и коды не нужны."
+                    : "Steam не найден: запустите Steam-версию игры, чтобы заходить через Steam. Пока можно подключиться по коду или IP ниже.", sDim);
+                if (!string.IsNullOrEmpty(steam.Status)) GUILayout.Label(steam.Status, sText);
+                if (!steam.Available) showOtherWays = true;
+                if (!(showOtherWays = EggToggle(showOtherWays, "Другие способы: код приглашения, IP, Radmin"))) return;
                 GUILayout.Label("Код приглашения или IP:порт (например, Radmin-адрес хоста)", sDim);
                 GUILayout.BeginHorizontal();
                 joinText = Streamer ? GUILayout.PasswordField(joinText, '•', 64) : GUILayout.TextField(joinText, 64);
@@ -1068,13 +1079,23 @@ namespace EggCoop
                 return;
             }
             string ping = net.Ping.TryGetValue(0, out var hp) ? $" · пинг до хоста {hp} мс" : "";
-            GUILayout.Label(net.IsHost ? $"Вы хост · игроков {net.PlayerCount}/{CoopNet.MaxPlayers}" : $"Вы гость · игроков {net.PlayerCount}{ping}", sText);
+            GUILayout.Label(net.IsHost ? $"Вы хост · игроков {net.PlayerCount}/{CoopNet.MaxPlayers}" : $"Вы гость · игроков {net.PlayerCount}{ping}" + (steam.GuestViaSteam ? $" · через Steam, хост {steam.HostName}" : ""), sText);
             if (net.IsHost)
             {
                 GUILayout.Label(("Как друзьям зайти").ToUpperInvariant(), sHead);
-                if (net.Code != null) AddressRow(net.Code, "код приглашения (содержит ваш внешний IP)");
-                if (net.VpnSuspected) GUILayout.Label("У вас, похоже, включён VPN: по коду друзья могут не зайти. Выключите VPN или дайте адрес ниже.", sDim);
-                if (hostAddrs != null) foreach (var a in hostAddrs) { var p = a.Split('|'); AddressRow(p[0], p[1]); }
+                if (steam.InLobby)
+                {
+                    if (GUILayout.Button("Пригласить друзей через Steam", sBtn)) steam.Invite();
+                    GUILayout.Label("Или друзья жмут «Присоединиться к игре» у вас в списке друзей Steam. Связь идёт через серверы Valve: адреса не нужны и нигде не видны.", sDim);
+                }
+                else if (!string.IsNullOrEmpty(steam.Status)) GUILayout.Label(steam.Status, sText);
+                if (steam.InLobby) showOtherWays = EggToggle(showOtherWays, "Другие способы: код приглашения, IP, Radmin");
+                if (!steam.InLobby || showOtherWays)
+                {
+                    if (net.Code != null) AddressRow(net.Code, "код приглашения (содержит ваш внешний IP)");
+                    if (net.VpnSuspected) GUILayout.Label("У вас, похоже, включён VPN: по коду друзья могут не зайти. Выключите VPN или дайте адрес ниже.", sDim);
+                    if (hostAddrs != null) foreach (var a in hostAddrs) { var p = a.Split('|'); AddressRow(p[0], p[1]); }
+                }
                 GUILayout.Label(("Настройки хоста").ToUpperInvariant(), sHead);
                 DrawHostToggles();
             }
@@ -1126,6 +1147,6 @@ namespace EggCoop
             GUILayout.EndHorizontal();
         }
 
-        void OnDestroy() { StopAllEffects(); net?.Stop(); }
+        void OnDestroy() { StopAllEffects(); net?.Stop(); steam?.Close(); }
     }
 }

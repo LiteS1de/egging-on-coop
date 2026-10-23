@@ -28,6 +28,7 @@
     <Reference Include="$(Managed)\Assembly-CSharp.dll" Private="false" />
     <Reference Include="$(Managed)\Rewired_Core.dll" Private="false" />
     <Reference Include="$(Managed)\RayFireAssembly.dll" Private="false" />
+    <Reference Include="$(Managed)\com.rlabrecque.steamworks.net.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.UI.dll" Private="false" />
     <Reference Include="$(Managed)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.ImageConversionModule.dll" Private="false" />
