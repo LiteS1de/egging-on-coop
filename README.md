@@ -1,10 +1,10 @@
+<p align="center"><b>Русский</b> · <a href="README.en.md">English</a></p>
+
 # Egging On Co-op
 
 Кооператив для [Egging On](https://store.steampowered.com/app/2897610/Egging_On/) на 2–4 игроков: яйца друзей в вашем мире,
 общий мир (предметы, бутылки, платформы, события, площадки дрона), телепорт к другу, эмоции и метки, доска позора.
 Подключение по коду приглашения, через Radmin VPN или по IP.
-
-*Co-op mod for Egging On (2–4 players). Download the release zip, unpack it anywhere and run `Установить.bat` ("Install").*
 
 ## Установка
 
