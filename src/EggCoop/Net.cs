@@ -29,9 +29,9 @@ namespace EggCoop
     // Connection setup follows sa-coop: UPnP -> STUN -> invite code -> UDP hole punch via ntfy -> (VPN / direct IP fallback).
     public class CoopNet : INetEventListener
     {
-        public const string ConnectKey = "EggCoop/0.3";   // also a version check: different mod versions refuse each other
+        public const string ConnectKey = "EggCoop/0.4";   // also a version check: different mod versions refuse each other
         public const int MaxPlayers = 4;
-        const byte MsgState = 1, MsgLeave = 2, MsgSettings = 3;
+        const byte MsgState = 1, MsgLeave = 2, MsgSettings = 3, MsgWelcome = 4, MsgWorld = 5, MsgClock = 6;
         static readonly byte[] Punch = Encoding.ASCII.GetBytes("EGGPUNCH");
         static readonly byte[] Discover = Encoding.ASCII.GetBytes("EGGDISC");
         static readonly byte[] Here = Encoding.ASCII.GetBytes("EGGHERE");
@@ -44,7 +44,12 @@ namespace EggCoop
         public event Action<int, EggState> OnState;
         public event Action<int> OnLeave;
         public event Action<bool, bool> OnSettings;
-        public event Action<string> OnEnded;   // the session ended on its own (host gone, join failed)
+        public event Action<string> OnEnded;
+        public event Action<int, NetPacketReader> OnWorld;   // (sender player id, payload) for WorldSync
+        public int MyId => IsHost ? 0 : myId;               // host is 0, guests peer.Id + 1 (told by the host)
+        public bool Connected => manager != null && (IsHost || (hostPeer != null && myId > 0));
+        int myId;
+        float nextClock;   // the session ended on its own (host gone, join failed)
         string endReason;   // (collide, crackOnHit) chosen by the host
         public readonly List<string> Log = new List<string>();
         public readonly Dictionary<int, int> Ping = new Dictionary<int, int>();   // player id -> ms (host: every guest; guest: only the host, id 0)
@@ -236,6 +241,12 @@ namespace EggCoop
             manager.PollEvents();
             if (endReason != null) { var why = endReason; endReason = null; Stop(); OnEnded?.Invoke(why); return; }
             float now = Time.unscaledTime;
+            if (IsHost && now >= nextClock && manager.ConnectedPeersCount > 0)
+            {
+                nextClock = now + 1f;
+                var w = new NetDataWriter(); w.Put(MsgClock); w.Put((byte)0); w.Put(Time.time);
+                manager.SendToAll(w, DeliveryMethod.Unreliable);
+            }
             if (punchTargets.Count > 0 && now >= nextPunch)
             {
                 nextPunch = now + 0.25f;
@@ -256,6 +267,15 @@ namespace EggCoop
             Write(0, s);
             if (IsHost) manager.SendToAll(writer, DeliveryMethod.Sequenced);
             else hostPeer?.Send(writer, DeliveryMethod.Sequenced);
+        }
+
+        // World messages: guest -> host (host relays), host -> everyone, or host -> one player (toId).
+        public NetDataWriter WorldWriter() { var w = new NetDataWriter(); w.Put(MsgWorld); w.Put((byte)MyId); return w; }
+        public void SendWorld(NetDataWriter w, DeliveryMethod m, int toId = -1)
+        {
+            if (manager == null) return;
+            if (!IsHost) { hostPeer?.Send(w, m); return; }
+            foreach (var p in manager.ConnectedPeerList) if (toId < 0 || p.Id + 1 == toId) p.Send(w, m);
         }
 
         // Host only: tell every guest how eggs interact. Guests apply it to their own egg.
@@ -288,6 +308,8 @@ namespace EggCoop
             manager.Stop(true);
             manager = null;
             hostPeer = null;
+            myId = 0;
+            SharedClock.Offset = 0f;
             Code = null;
             punchTargets.Clear();
             Ping.Clear();
@@ -309,7 +331,14 @@ namespace EggCoop
 
         public void OnPeerConnected(NetPeer peer)
         {
-            if (IsHost) { Say($"Игрок подключился: {peer}"); peer.Send(SettingsPacket(), DeliveryMethod.ReliableOrdered); return; }
+            if (IsHost)
+            {
+                Say($"Игрок подключился: {peer}");
+                var w = new NetDataWriter(); w.Put(MsgWelcome); w.Put((byte)(peer.Id + 1));
+                peer.Send(w, DeliveryMethod.ReliableOrdered);
+                peer.Send(SettingsPacket(), DeliveryMethod.ReliableOrdered);
+                return;
+            }
             if (hostPeer != null) { peer.Disconnect(); return; }   // LAN + public route both succeeded: keep the first
             hostPeer = peer;
             Say($"Подключено к хосту {peer}");
@@ -344,6 +373,21 @@ namespace EggCoop
             int id = r.GetByte();
             if (type == MsgLeave) { remoteIds.Remove(id); OnLeave?.Invoke(id); r.Recycle(); return; }
             if (type == MsgSettings && !IsHost) { byte f = r.GetByte(); r.Recycle(); OnSettings?.Invoke((f & 1) != 0, (f & 2) != 0); return; }
+            if (type == MsgWelcome && !IsHost) { myId = id; r.Recycle(); return; }
+            if (type == MsgClock && !IsHost) { SharedClock.Sample(r.GetFloat() + peer.Ping / 1000f); r.Recycle(); return; }
+            if (type == MsgWorld)
+            {
+                if (IsHost)
+                {
+                    id = peer.Id + 1;
+                    // Relay to the other guests with the real sender id, then handle it here too.
+                    var relay = new NetDataWriter(); relay.Put(MsgWorld); relay.Put((byte)id); relay.Put(r.RawData, r.Position, r.AvailableBytes);
+                    foreach (var p in manager.ConnectedPeerList) if (p != peer) p.Send(relay, method);
+                }
+                OnWorld?.Invoke(id, r);
+                r.Recycle();
+                return;
+            }
             if (type != MsgState) { r.Recycle(); return; }
             var s = new EggState
             {

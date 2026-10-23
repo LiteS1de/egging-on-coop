@@ -19,9 +19,13 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.3.0";
+        public const string Version = "0.4.0";
         public static ManualLogSource Log;
         static Plugin instance;
+        readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
+        WorldSync world;
+        float inGameSince = -1f;
+        bool wasActive;
         const float SendInterval = 1f / 30f, GhostTimeout = 5f;
 
         readonly CoopConfig cfg = new CoopConfig();
@@ -39,7 +43,7 @@ namespace EggCoop
             Log = Logger;
             instance = this;
             // Show the teleport summary when the game's end credits start.
-            try { new HarmonyLib.Harmony("eggcoop").Patch(HarmonyLib.AccessTools.Method(typeof(EndCredits), nameof(EndCredits.Play)), postfix: new HarmonyLib.HarmonyMethod(typeof(Plugin), nameof(CreditsPostfix))); }
+            try { harmony.Patch(HarmonyLib.AccessTools.Method(typeof(EndCredits), nameof(EndCredits.Play)), postfix: new HarmonyLib.HarmonyMethod(typeof(Plugin), nameof(CreditsPostfix))); }
             catch (System.Exception e) { Log.LogWarning("Credits hook failed: " + e.Message); }
             cfg.Nick = Config.Bind("General", "Nick", "Egg" + Random.Range(100, 999), "Имя над вашим яйцом");
             cfg.MenuKey = Config.Bind("General", "MenuKey", KeyCode.F9, "Клавиша окна кооператива");
@@ -64,6 +68,7 @@ namespace EggCoop
             net.OnLeave += RemoveGhost;
             net.OnSettings += ApplyHostSettings;
             net.OnEnded += Toast;
+            try { world = new WorldSync(net, harmony); } catch (System.Exception e) { Log.LogError("World sync disabled: " + e); }
             Application.quitting += () => net.Stop();   // tell friends right away instead of letting them time out
             ApplyOwnSettings();
             ReadTestArgs();
@@ -97,7 +102,9 @@ namespace EggCoop
                 else if (a[i] == "-coop-hitlog") PatchCrackLog();   // log friend hits and what caused each crack
                 else if (a[i] == "-coop-tptest") tpTest = true;
                 else if (a[i] == "-coop-menu") openMenu = true;
-                else if (a[i] == "-coop-worlddump") worldDump = true;   // F9 open on arrival, for screenshots
+                else if (a[i] == "-coop-worlddump") worldDump = true;
+                else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s
+                else if (a[i] == "-coop-worldlog") worldLog = true;   // log the pushed object + a platform every 2 s   // F9 open on arrival, for screenshots
                 else if (a[i] == "-coop-crackfirst") crackFirst = true;   // join right after our shell rebuilds: the ghost is built then
 #endif
             }
@@ -163,6 +170,7 @@ namespace EggCoop
             if (inGame) HarmonyLib.AccessTools.Field(typeof(EggController), "afkTimeout").SetValue(World.instance.GetEgg(), 0f);
             if (inGame && openMenu && net.Active) { openMenu = false; SetMenu(true); }
             if (inGame && worldDump && Time.unscaledTime > 40f) { worldDump = false; DumpWorld(); }
+            if (inGame) WorldLabStep();
             if (inGame && standTest && !net.IsHost) StandTestStep();
             if (inGame && tpTest && !net.IsHost && ghosts.Count > 0) { var g = ghosts.Values.First(); Log.LogInfo($"Lab tp: {TryTeleport(g)}"); nextLabStep += 9f; }
 #endif
@@ -171,7 +179,32 @@ namespace EggCoop
 #if LAB
         // "-coop-standtest" (guest): drop onto the host's ghost from 1.5 m, then from 40 m, and log where we ended up
         // and whether the shell cracked. Read with: Select-String LogOutput.log "Lab stand"
-        bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump;
+        bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump, pushTest, worldLog;
+        static int labBody, pushCount;
+        float nextPush, nextWorldLog;
+        void WorldLabStep()
+        {
+            float now = Time.unscaledTime;
+            if (pushTest && !net.IsHost && net.Connected && now > nextPush && world != null && world.Count > 0)
+            {
+                nextPush = now + 12f;
+                if (++pushCount % 2 == 1) { labBody = world.TestPush(World.instance.GetEgg().GetPosition()); Log.LogInfo($"Lab push: {labBody} {world.Describe(labBody)}"); }
+                else
+                {
+                    // Real path: drop our egg on the object; the collision must claim it.
+                    labBody = world.Nearest(World.instance.GetEgg().GetPosition(), out var bp);
+                    Place(bp + Vector3.up * 1.5f);
+                    Log.LogInfo($"Lab drop on: {labBody} {world.Describe(labBody)}");
+                }
+            }
+            if (worldLog && now > nextWorldLog && world != null)
+            {
+                nextWorldLog = now + 2f;
+                var mover = Resources.FindObjectsOfTypeAll<KinematicCurveMovement>().Where(m => m.gameObject.scene.IsValid()).OrderBy(m => m.name).FirstOrDefault();
+                var mp = mover != null ? mover.transform.position : Vector3.zero;
+                Log.LogInfo(System.FormattableString.Invariant($"Lab world t={System.DateTimeOffset.Now.ToUnixTimeMilliseconds()} clock={SharedClock.Time:F2} off={SharedClock.Offset:F2} mover=({mp.x:F2},{mp.y:F2},{mp.z:F2}) body={(labBody != 0 ? labBody : world.LastRemoteBody)} {world.Describe(labBody != 0 ? labBody : world.LastRemoteBody)}"));
+            }
+        }
 
         // Stage 4 recon: what moves in this world and how the game identifies it.
         void DumpWorld()
@@ -329,6 +362,12 @@ namespace EggCoop
             net.Poll();
 
             bool inGame = InGame();
+            // Register the world's objects once the level has settled (stabilizers unfreeze bodies ~0.5 s after spawn).
+            inGameSince = inGame ? (inGameSince < 0 ? Time.unscaledTime : inGameSince) : -1f;
+            if (world != null && inGameSince >= 0 && Time.unscaledTime - inGameSince > 3f) world.Register();
+            if (wasActive && !net.Active) world?.Reset();
+            wasActive = net.Active;
+            world?.Update();
             RunTestArgs(inGame);
             if (inGame && net.Active && Time.unscaledTime >= nextSend)
             {
@@ -362,6 +401,8 @@ namespace EggCoop
             MeasurePeak();
 #endif
         }
+
+        void FixedUpdate() => world?.FixedUpdate();
 
         void HandleKeys()
         {
@@ -713,6 +754,7 @@ namespace EggCoop
                     GUILayout.EndHorizontal();
                 }
                 if (ghosts.Count == 0) GUILayout.Label("Пока никого нет", sDim);
+                if (world != null) GUILayout.Label($"Общий мир: {world.Count} предметов · ведёте {world.Owned} · у друзей {world.Following}", sDim);
             }
 
             GUILayout.Label("Клавиши", sHead);

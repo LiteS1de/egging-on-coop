@@ -120,3 +120,19 @@ Owner's report and what 0.3.0 does about it:
 ## References
 - vendor/coop-anything: playbook/how-coop-mods-work.md, networking.md, multi-instance-testing.md, games/tainted-grail-the-fall-of-avalon/NOTES.md
 - vendor/universal-modder: skills/mod-any-game/references/engines/unity.md, knowledge/games/tunic/seamless-coop-bepinex6-native-hooks.md
+
+## Stage 4a/4c: shared world (0.4.0, 2026-10-23)
+- Recon (lab -coop-worlddump): 65 RigidDataHolders (game IDs, 2 duplicates), ~140 more loose bodies (hinged pots
+  "big_pot", 36 buttons, boards, signs, pool balls), 61 RayFire fragments (skipped), 10 KinematicCurveMovement.
+- WorldSync.cs: every non-kinematic world body (208 in the start area) keyed by FNV-1a of scene + hierarchy path
+  (+sibling index); joint-connected bodies form one group. Ownership per group: the egg that touches a free group
+  claims it (optimistic, host decides: first claim wins, an owner that stopped touching for 0.5 s loses it), bodies hit
+  by an owned body join that owner, owner streams poses at 20 Hz, releases after 1 s at rest with final poses
+  (reliable). Followers hold bodies kinematic, interpolate 100 ms behind, mark RigidDataHolder as moved (else the
+  game's stabilizer snaps it home). Guest gets a host snapshot (all poses + owners + brokenObjects) on join.
+  Breakables: new saveData.brokenObjects entries are mirrored; receivers just hide the object (no shatter fx).
+- SharedClock: host sends Time.time every second; KinematicCurveMovement.FixedUpdate is transpiled to use it.
+- PASS (lab): guest-thrown bucket ends at the same pose on both copies (to the cm, 3/3); dropping the egg on an
+  object claims it through the real collision path; guest clock matches host clock within 0.01 s.
+- NOT VERIFIED: hinged pots in the kitchen, claim races between two players, breakables across PCs, platforms
+  actually in phase (the mover near spawn was culled), anything over real internet.
