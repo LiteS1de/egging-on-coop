@@ -22,7 +22,7 @@ namespace EggCoop
         bool wheelOpen, aiming;
         int wheelHover = -1;
         float lastEmoteAt = -10f, nextStats;
-        readonly Dictionary<int, (int emote, float t0)> bubbles = new Dictionary<int, (int, float)>();   // player id, -1 = us
+        readonly Dictionary<int, (int emote, float t0, string caption)> bubbles = new Dictionary<int, (int, float, string)>();   // player id, -1 = us
         readonly Dictionary<int, (Vector3 at, float t0)> pings = new Dictionary<int, (Vector3, float)>();
         Dictionary<string, Shame> shame = new Dictionary<string, Shame>();
         static readonly FallTracker fall = new FallTracker();
@@ -100,9 +100,16 @@ namespace EggCoop
             if (i == PingIndex) { aiming = true; UpdateCursor(); return; }
             if (Time.unscaledTime - lastEmoteAt < 0.7f) return;   // no spamming
             lastEmoteAt = Time.unscaledTime;
-            bubbles[-1] = (i, Time.unscaledTime);
+            bubbles[-1] = (i, Time.unscaledTime, null);
+            SendEmote(i, null);
+        }
+
+        // caption: a viewer's name under a stream emote (0.5.0 peers ignore the extra bytes).
+        void SendEmote(int i, string caption)
+        {
             if (!net.Connected) return;
             var w = net.WorldWriter(); w.Put(SEmote); w.Put((byte)i);
+            if (caption != null) w.Put(caption, 32);
             net.SendWorld(w, DeliveryMethod.ReliableUnordered);
         }
 
@@ -130,7 +137,15 @@ namespace EggCoop
             {
                 case SEmote:
                     int i = r.GetByte();
-                    if (i < EmoteIcons.Length && i != PingIndex) bubbles[from] = (i, Time.unscaledTime);
+                    string caption = r.AvailableBytes > 0 ? r.GetString(32) : null;
+                    if (i < EmoteIcons.Length && i != PingIndex) bubbles[from] = (i, Time.unscaledTime, caption);
+                    break;
+                case SEffect:
+                    string effect = r.GetString(48), viewer = r.GetString(32);
+                    Toast($"{viewer} → {NickOf(from)}: {effect}");
+                    break;
+                case SPull:
+                    ReceivePull(from, r);
                     break;
                 case SPing:
                     pings[from] = (new Vector3(r.GetFloat(), r.GetFloat(), r.GetFloat()), Time.unscaledTime);
@@ -305,6 +320,13 @@ namespace EggCoop
                 float y = Mathf.Round(Mathf.Clamp(Screen.height - sp.y - size - (kv.Key < 0 ? 10f : 26f), 8f, Screen.height - size - 8f));
                 GUI.color = new Color(1, 1, 1, Mathf.Clamp01((EmoteTime - age) * 2.5f));
                 GUI.DrawTexture(new Rect(x - Mathf.Round(size / 2), y, size, size), emoteTex[kv.Value.emote]);
+                if (!string.IsNullOrEmpty(kv.Value.caption))
+                {
+                    var cr = new Rect(x - 120, y + size, 240, 20);
+                    var a = GUI.color.a;
+                    GUI.color = new Color(0, 0, 0, a * 0.8f); GUI.Label(new Rect(cr.x + 1, cr.y + 1, cr.width, cr.height), kv.Value.caption, tag);
+                    GUI.color = new Color(1f, 0.85f, 0.6f, a); GUI.Label(cr, kv.Value.caption, tag);
+                }
             }            foreach (var kv in pings.ToList())
             {
                 float age = now - kv.Value.t0;

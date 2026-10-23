@@ -71,5 +71,18 @@ Check(StreamerMask.Apply("код ABCD-EFGH-JKMN готов") == "код ••�
 Check(!StreamerMask.Apply("from [fe80::1c2d:3e4f]:7788").Contains("fe80") && !StreamerMask.Apply("2001:db8:85a3:0:0:8a2e:370:7334").Contains("db8"), "ipv6");
 Check(StreamerMask.Apply("t=10:41:09 пинг 80 мс, версия 5.4.23.5 тоже IP-подобна") == "t=10:41:09 пинг 80 мс, версия •.•.•.• тоже IP-подобна", "clock kept, dotted versions masked");
 
+// Viewer effects: one per Gap, per-effect cooldown, waits while the game cannot run it, expires after MaxWait.
+var sq = new StreamQueue { Gap = 10, MaxWait = 60, Cooldown = e => e == "wind" ? 30 : 0 };
+var gone = new System.Collections.Generic.List<StreamQueue.Req>();
+sq.Add(new StreamQueue.Req { Effect = "wind", At = 0 }); sq.Add(new StreamQueue.Req { Effect = "wind", At = 0 }); sq.Add(new StreamQueue.Req { Effect = "moon", At = 0 });
+Check(sq.Next(0, e => true, gone)?.Effect == "wind", "first runs");
+Check(sq.Next(5, e => true, gone) == null, "gap holds the rest");
+Check(sq.Next(10, e => true, gone)?.Effect == "moon", "wind on cooldown, moon goes ahead");
+Check(sq.Next(25, e => true, gone) == null && sq.CooldownLeft("wind", 25) == 5, "second wind waits for its cooldown");
+Check(sq.Next(30, e => false, gone) == null && sq.Count == 1, "game busy: keeps waiting");
+Check(sq.Next(30, e => true, gone)?.Effect == "wind", "then runs");
+sq.Add(new StreamQueue.Req { Effect = "flip", At = 31 });
+Check(sq.Next(95, e => false, gone) == null && gone.Count == 1 && gone[0].Effect == "flip" && sq.Count == 0, "expired goes back for a refund");
+
 Console.WriteLine("code example: " + code);
 Console.WriteLine("ALL OK");

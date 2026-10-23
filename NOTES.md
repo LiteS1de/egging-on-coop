@@ -194,3 +194,8 @@ Owner's report and what 0.3.0 does about it:
 
 ## Streamer mode (2026-10-23, not released yet)
 - F9 toggle (config General.StreamerMode): invite codes, IPv4/IPv6 masked in the host address list, network log and toasts; join field becomes a password field; Копировать still copies the real value. StreamerMask in SocialMath.cs (SelfTest: ipv4+port, code, ipv6, clocks kept). PASS screenshot: F9 top shows only dots.
+
+## Viewer effects + F9 tabs (2026-10-23, not released; Twitch link needs the app Client ID)
+- Stream.cs: 10 effects (emote with viewer name, confetti, wind, hop, moon gravity x0.35 15 s, slow-mo 0.6 10 s, ice = zero-friction egg collider 15 s, camera roll 180 at render time 10 s, teleport to a friend, pull a friend (their opt-in toggle)). Per effect: on/off, channel points, bits, cooldown (config Stream.<id>); global gap; F10 pause. StreamQueue (StreamCore.cs, SelfTest): one per gap, per-effect cooldown, waits while cracked/frozen/paused, expires after 60 s -> OnEffectDone(req, false) for refunds. Friends get a toast per effect (SEffect), pulls go by SPull.
+- PASS (one lab copy, -coop-streamtest): gravity -30 -> -10.5 -> -30, timeScale 0.6 -> 1, ice material set and restored, hop 4.4 m/s, flip and confetti on screenshots, co-op effects without friends time out.
+- F9 split into tabs: Игра (streamer toggle first, it shows addresses) / Игроки / Стрим / Доска / Настройки.

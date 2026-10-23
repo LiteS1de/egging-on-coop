@@ -59,6 +59,7 @@ namespace EggCoop
             cfg.PingKey = Config.Bind("General", "PingKey", KeyCode.Mouse2, "Метка туда, куда смотрит камера (Mouse2 — колёсико мыши)");
             cfg.ShameStats =Config.Bind("Stats", "Shame", "", "Доска позора (ник:разбился,падений,худшее,потеряно м;...)");
             shame = Shame.Parse(cfg.ShameStats.Value);
+            InitStream();
             cfg.Port = Config.Bind("Network", "Port", 7788, "UDP-порт хоста");
             cfg.SignalUrl = Config.Bind("Network", "SignalUrl", "https://ntfy.sh", "ntfy-сервер для пробивки NAT");
             cfg.StunServers = Config.Bind("Network", "StunServers", "stun.l.google.com:19302,stun.cloudflare.com:3478", "STUN-серверы через запятую");
@@ -117,6 +118,7 @@ namespace EggCoop
                 else if (a[i] == "-coop-gomover") goMover = true;
                 else if (a[i] == "-coop-flagtest") flagTest = true;     // replay every world event as if a friend did it, then tour them
                 else if (a[i] == "-coop-socialdemo") socialDemo = true;
+                else if (a[i] == "-coop-streamtest") streamTest = true;   // queue every viewer effect in turn and log what it changed
                 else if (a[i] == "-coop-streamer") { cfg.StreamerMode.Value = true; showLog = true; joinText = "26.12.34.56:7788"; }   // streamer-mode screenshots: menu + network log // wheel, bubble, ping and board on screen for screenshots
                 else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
@@ -194,11 +196,22 @@ namespace EggCoop
             if (inGame && tpTest && !net.IsHost && ghosts.Count > 0) { var g = ghosts.Values.First(); Log.LogInfo($"Lab tp: {TryTeleport(g)}"); nextLabStep += 9f; }
             if (inGame && flagTest && world != null && world.Count > 0 && Time.unscaledTime > 45f) FlagTestStep();
             if (inGame && socialDemo && Time.unscaledTime > 30f) SocialDemoStep();
+            if (inGame && streamTest && Time.unscaledTime > 30f) StreamTestStep();
 #endif
         }
 
 #if LAB
-        bool flagTest, socialDemo;
+        bool flagTest, socialDemo, streamTest;
+        int streamStep;
+        void StreamTestStep()
+        {
+            var core = World.instance.GetEggCore();
+            Log.LogInfo(System.FormattableString.Invariant($"Lab stream: g={Physics.gravity.y:0.00} ts={Time.timeScale:0.00} mat={(core.eggCollider.sharedMaterial != null ? core.eggCollider.sharedMaterial.name : "-")} v={core.eggRigidbody.velocity.magnitude:0.0} active={string.Join(",", activeUntil.Keys)} queue={streamQ.Count} yolk={core.yolkState}"));
+            if (streamStep == 0) { streamEffects.Value = true; streamGap.Value = 4; }
+            if (streamStep < Effects.Length) Log.LogInfo($"Lab stream: request {Effects[streamStep].Id} -> {RequestEffect(Effects[streamStep].Id, "zritel_test", "test")}");
+            else if (streamStep == Effects.Length + 8) { SetMenu(true); menuTab = 2; }
+            streamStep++;
+        }
         int flagPhase;
         List<(string name, Vector3 at)> sights;
         void FlagTestStep()
@@ -229,14 +242,14 @@ namespace EggCoop
                     SetMenu(false);
                     shame["Petya"] = new Shame { Cracks = 4, Falls = 9, MaxFall = 37f, Lost = 212f };
                     shame["Vasya"] = new Shame { Cracks = 1, Falls = 3, MaxFall = 12f, Lost = 30f };
-                    labHover = 2; bubbles[-1] = (2, Time.unscaledTime);
+                    labHover = 2; bubbles[-1] = (2, Time.unscaledTime, null);
                     break;
                 case 1:
                     labHover = -1;
                     PlacePing(new Vector2(Screen.width * 0.72f, Screen.height * 0.55f));   // like the ping key, off-centre so it does not cover the emote
                     if (cam != null) pings[2] = (egg + cam.transform.right * 40f + cam.transform.forward * 10f, Time.unscaledTime);   // a friend's, off to the right
                     Log.LogInfo($"Lab ping: {(pings.TryGetValue(-1, out var p) ? p.at.ToString() : "none")} egg={egg} cam={(cam != null ? cam.transform.position.ToString() : "-")}");
-                    bubbles[-1] = (6, Time.unscaledTime);
+                    bubbles[-1] = (6, Time.unscaledTime, "zritel_vasya");
                     break;
                 case 2:
                     labHover = 7;
@@ -245,7 +258,7 @@ namespace EggCoop
                     break;
                 case 3:
                     labHover = -1; SetMenu(true);
-                    menuScroll.y = demoStep > 4 ? 100000f : 0f;   // second round: the bottom of the menu (shame board, keys)
+                    menuTab = demoStep > 4 ? 3 : 0;   // second round: the shame board tab
                     break;
             }
         }
@@ -504,7 +517,7 @@ namespace EggCoop
         bool showLog;
         List<string> hostAddrs;
         readonly List<(string text, float until)> toasts = new List<(string, float)>();
-        GUIStyle sWin, sHead, sText, sDim, sBtn, sToast, sPanel, sToggle;
+        GUIStyle sWin, sHead, sText, sDim, sBtn, sTabOn, sToast, sPanel, sToggle;
         Vector2 menuScroll;
         float menuContentHeight = 600;   // measured each repaint; the scroll area is this tall, capped by the screen
 
@@ -561,6 +574,7 @@ namespace EggCoop
                 kv.Value.Update(inGame);
             }
             SocialTick(inGame);
+            StreamTick(inGame);
             if (pickerUntil > 0 && (Time.unscaledTime > pickerUntil || ghosts.Count < 2)) pickerUntil = 0;
             if (net.Active && net.IsHost && hostAddrs == null) hostAddrs = LocalAddresses(cfg.Port.Value);
             if (!net.Active) hostAddrs = null;
@@ -574,6 +588,7 @@ namespace EggCoop
         void HandleKeys()
         {
             if (Input.GetKeyDown(cfg.MenuKey.Value)) SetMenu(!menuOpen);
+            if (Input.GetKeyDown(streamPauseKey.Value) && streamEffects.Value) SetStreamPaused(!streamPaused);
             if (menuOpen || HandleSocialKeys()) return;
             if (Input.GetKeyDown(cfg.TpKey.Value))
             {
@@ -822,6 +837,8 @@ namespace EggCoop
             sBtn = new GUIStyle(GUI.skin.button) { font = font, fontSize = 14, fixedHeight = 28, border = hoverBorder, padding = new RectOffset(10, 10, 4, 4) };
             sBtn.normal.background = field; sBtn.hover.background = sBtn.active.background = hover;
             sBtn.normal.textColor = Color.white; sBtn.hover.textColor = sBtn.active.textColor = Orange;
+            sTabOn = new GUIStyle(sBtn);   // the open tab looks like a hovered button
+            sTabOn.normal.background = hover; sTabOn.normal.textColor = Orange;
             // Checkboxes are text buttons with the game's egg drawn in front: orange egg = on, faint egg = off.
             sToggle = Label(14, Color.white); sToggle.padding = new RectOffset(30, 4, 4, 4); sToggle.wordWrap = false;
             sToggle.hover.textColor = sToggle.active.textColor = Orange;
@@ -848,7 +865,7 @@ namespace EggCoop
         {
             if (sText != null) return;
             sText = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
-            sDim = sHead = sText; sBtn = GUI.skin.button; sToggle = GUI.skin.toggle; sWin = null;
+            sDim = sHead = sText; sBtn = sTabOn = GUI.skin.button; sToggle = GUI.skin.toggle; sWin = null;
             tag = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
             sToast = sPanel = new GUIStyle(GUI.skin.box) { fontSize = 14, richText = true };
         }
@@ -865,13 +882,14 @@ namespace EggCoop
             if (waitKey != null && e.type == EventType.MouseDown && e.button >= 2 && e.button <= 6) { e.keyCode = KeyCode.Mouse0 + e.button; e.type = EventType.KeyDown; }
             if (waitKey != null && e.type == EventType.KeyDown && e.keyCode != KeyCode.None)
             {
-                if (e.keyCode != KeyCode.Escape) (waitKey == "menu" ? cfg.MenuKey : waitKey == "emote" ? cfg.EmoteKey : waitKey == "ping" ? cfg.PingKey : cfg.TpKey).Value = e.keyCode;
+                if (e.keyCode != KeyCode.Escape) (waitKey == "menu" ? cfg.MenuKey : waitKey == "emote" ? cfg.EmoteKey : waitKey == "ping" ? cfg.PingKey : waitKey == "pause" ? streamPauseKey : cfg.TpKey).Value = e.keyCode;
                 waitKey = null;
                 ignoreKeysFrame = Time.frameCount + 1;   // the same press must not also open the menu or teleport
                 e.Use();
             }
             DrawNameTags();
             DrawSocial();
+            DrawConfetti();
             DrawToasts();
             if ((wheelOpen || labHover >= 0) && wheelDisc != null) DrawWheel();
             if (pickerUntil > 0 || (uiDemoPicker && ghosts.Count > 0)) DrawPicker();
@@ -988,14 +1006,41 @@ namespace EggCoop
             GUILayout.EndHorizontal();
         }
 
+        static readonly string[] MenuTabs = { "Игра", "Игроки", "Стрим", "Доска", "Настройки" };
+        int menuTab;
+
         void DrawMenu(int _)
         {
-            menuScroll = GUILayout.BeginScrollView(menuScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(Mathf.Min(menuContentHeight, Screen.height - 70)));
+            // Tabs stay on top; only the page under them scrolls.
+            GUILayout.BeginHorizontal();
+            for (int t = 0; t < MenuTabs.Length; t++)
+            {
+                string label = MenuTabs[t] + (t == 1 && ghosts.Count > 0 ? $" {ghosts.Count}" : "") + (t == 2 && streamEffects.Value && streamPaused ? " · пауза" : "");
+                if (GUILayout.Button(label, t == menuTab ? sTabOn : sBtn) && t != menuTab) { menuTab = t; menuScroll = Vector2.zero; waitKey = null; }
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4);
+            menuScroll = GUILayout.BeginScrollView(menuScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.Height(Mathf.Min(menuContentHeight, Screen.height - 110)));
+            switch (menuTab)
+            {
+                case 0: DrawGameTab(); break;
+                case 1: DrawPlayersTab(); break;
+                case 2: DrawStreamerToggle(); DrawStreamSection(); break;
+                case 3: DrawShameBoard(); break;
+                default: DrawSettingsTab(); break;
+            }
+            if (Event.current.type == EventType.Repaint) menuContentHeight = GUILayoutUtility.GetLastRect().yMax + 8;
+            GUILayout.EndScrollView();
+            GUI.DragWindow();
+        }
+
+        void DrawGameTab()
+        {
+            DrawStreamerToggle();   // first: this tab shows the addresses
             GUILayout.BeginHorizontal();
             GUILayout.Label("Ник", sText, GUILayout.Width(40));
             cfg.Nick.Value = GUILayout.TextField(cfg.Nick.Value, 24);
             GUILayout.EndHorizontal();
-            DrawStreamerToggle();
 
             if (!net.Active)
             {
@@ -1012,59 +1057,58 @@ namespace EggCoop
                     net.Join(joinText);
                 }
                 GUILayout.EndHorizontal();
+                return;
             }
-            else
+            string ping = net.Ping.TryGetValue(0, out var hp) ? $" · пинг до хоста {hp} мс" : "";
+            GUILayout.Label(net.IsHost ? $"Вы хост · игроков {net.PlayerCount}/{CoopNet.MaxPlayers}" : $"Вы гость · игроков {net.PlayerCount}{ping}", sText);
+            if (net.IsHost)
             {
-                string ping = net.Ping.TryGetValue(0, out var hp) ? $" · пинг до хоста {hp} мс" : "";
-                GUILayout.Label(net.IsHost ? $"Вы хост · игроков {net.PlayerCount}/{CoopNet.MaxPlayers}" : $"Вы гость · игроков {net.PlayerCount}{ping}", sText);
-                if (net.IsHost)
-                {
-                    GUILayout.Label(("Как друзьям зайти").ToUpperInvariant(), sHead);
-                    if (net.Code != null) AddressRow(net.Code, "код приглашения (содержит ваш внешний IP)");
-                    if (net.VpnSuspected) GUILayout.Label("У вас, похоже, включён VPN: по коду друзья могут не зайти. Выключите VPN или дайте адрес ниже.", sDim);
-                    if (hostAddrs != null) foreach (var a in hostAddrs) { var p = a.Split('|'); AddressRow(p[0], p[1]); }
-                    GUILayout.Label(("Настройки хоста").ToUpperInvariant(), sHead);
-                    DrawHostToggles();
-                }
-                else GUILayout.Label((Ghost.Collide ? "Столкновения: вкл" : "Режим призраков: сквозь друг друга") + (Ghost.Collide && Ghost.CrackOnHit ? ", удар разбивает скорлупу" : "") + "  (решает хост)", sDim);
-
-                GUILayout.Label(($"Игроки · ваших телепортов: {tpCounts.Values.Sum()}").ToUpperInvariant(), sHead);
-                foreach (var kv in ghosts.OrderBy(kv => kv.Key))
-                {
-                    var g = kv.Value;
-                    GUILayout.BeginHorizontal();
-                    GUILayout.BeginVertical();
-                    GUILayout.Label(Describe(g), sText);
-                    GUILayout.Label((net.Ping.TryGetValue(kv.Key, out var pg) ? $"{pg} мс · " : "") + $"ТП к нему {(tpCounts.TryGetValue(g.Nick, out var n) ? n : 0)} · его ТП {g.TpTotal}", sDim);
-                    GUILayout.EndVertical();
-                    if (GUILayout.Button("Телепорт", sBtn, GUILayout.Width(125))) TryTeleport(g);
-                    GUILayout.EndHorizontal();
-                }
-                if (ghosts.Count == 0) GUILayout.Label("Пока никого нет", sDim);
-                if (world != null) GUILayout.Label($"Общий мир: {world.Count} предметов · ведёте {world.Owned} · у друзей {world.Following}", sDim);
+                GUILayout.Label(("Как друзьям зайти").ToUpperInvariant(), sHead);
+                if (net.Code != null) AddressRow(net.Code, "код приглашения (содержит ваш внешний IP)");
+                if (net.VpnSuspected) GUILayout.Label("У вас, похоже, включён VPN: по коду друзья могут не зайти. Выключите VPN или дайте адрес ниже.", sDim);
+                if (hostAddrs != null) foreach (var a in hostAddrs) { var p = a.Split('|'); AddressRow(p[0], p[1]); }
+                GUILayout.Label(("Настройки хоста").ToUpperInvariant(), sHead);
+                DrawHostToggles();
             }
+            else GUILayout.Label((Ghost.Collide ? "Столкновения: вкл" : "Режим призраков: сквозь друг друга") + (Ghost.Collide && Ghost.CrackOnHit ? ", удар разбивает скорлупу" : "") + "  (решает хост)", sDim);
+            GUILayout.Space(8);
+            if (GUILayout.Button("Отключиться", sBtn)) net.Stop();
+        }
 
-            DrawShameBoard();
+        void DrawPlayersTab()
+        {
+            if (!net.Active) { GUILayout.Label("Вы не в кооперативе: создайте игру или подключитесь на вкладке «Игра».", sDim); return; }
+            GUILayout.Label(($"Игроки · ваших телепортов: {tpCounts.Values.Sum()}").ToUpperInvariant(), sHead);
+            foreach (var kv in ghosts.OrderBy(kv => kv.Key))
+            {
+                var g = kv.Value;
+                GUILayout.BeginHorizontal();
+                GUILayout.BeginVertical();
+                GUILayout.Label($"<color=#{ColorUtility.ToHtmlStringRGB(Color.Lerp(Color.white, PlayerColor(kv.Key), 0.6f))}>{Describe(g)}</color>", sText);
+                GUILayout.Label((net.Ping.TryGetValue(kv.Key, out var pg) ? $"{pg} мс · " : "") + $"ТП к нему {(tpCounts.TryGetValue(g.Nick, out var n) ? n : 0)} · его ТП {g.TpTotal}", sDim);
+                GUILayout.EndVertical();
+                if (GUILayout.Button("Телепорт", sBtn, GUILayout.Width(125))) TryTeleport(g);
+                GUILayout.EndHorizontal();
+            }
+            if (ghosts.Count == 0) GUILayout.Label("Пока никого нет", sDim);
+            if (world != null) GUILayout.Label($"Общий мир: {world.Count} предметов · ведёте {world.Owned} · у друзей {world.Following}", sDim);
+        }
 
+        void DrawSettingsTab()
+        {
             GUILayout.Label(("Клавиши").ToUpperInvariant(), sHead);
             KeyRow("Меню кооператива", "menu", cfg.MenuKey);
             KeyRow("Телепорт к другу", "tp", cfg.TpKey);
             KeyRow("Эмоции (зажать)", "emote", cfg.EmoteKey);
             KeyRow("Метка", "ping", cfg.PingKey);
+            KeyRow("Пауза эффектов", "pause", streamPauseKey);
             GUILayout.Label("При двух и более друзьях клавиша телепорта открывает выбор: нажмите цифру нужного игрока. Эмоции: зажмите клавишу, наведите мышь на картинку и отпустите. Метка ставится туда, куда смотрит камера (по умолчанию колёсико мыши, Mouse2); в колесе эмоций есть метка по клику.", sDim);
-
-            GUILayout.Space(8);
-            GUILayout.BeginHorizontal();
-            if (net.Active && GUILayout.Button("Отключиться", sBtn)) net.Stop();
-            if (GUILayout.Button(showLog ? "Скрыть журнал" : "Журнал", sBtn)) showLog = !showLog;
-            if (GUILayout.Button("Сбросить счётчики ТП", sBtn)) { tpCounts.Clear(); cfg.TpStats.Value = ""; }
-            GUILayout.EndHorizontal();
+            GUILayout.Label("СБРОС", sHead);
+            if (GUILayout.Button("Сбросить счётчики телепортов", sBtn)) { tpCounts.Clear(); cfg.TpStats.Value = ""; }
+            GUILayout.Label("ЖУРНАЛ СЕТИ", sHead);
+            if (GUILayout.Button(showLog ? "Скрыть журнал" : "Показать журнал", sBtn)) showLog = !showLog;
             if (showLog) lock (net.Log) foreach (var line in net.Log) GUILayout.Label(Hide(line), sDim);
-            if (Event.current.type == EventType.Repaint) menuContentHeight = GUILayoutUtility.GetLastRect().yMax + 8;
-            GUILayout.EndScrollView();
-            GUI.DragWindow();
         }
-
         void AddressRow(string address, string note)
         {
             GUILayout.BeginHorizontal();
@@ -1074,6 +1118,6 @@ namespace EggCoop
             GUILayout.EndHorizontal();
         }
 
-        void OnDestroy() => net?.Stop();
+        void OnDestroy() { StopAllEffects(); net?.Stop(); }
     }
 }
