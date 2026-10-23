@@ -100,16 +100,31 @@ switch ($cmd) {
         "lab stopped, real saves untouched"
     }
     "pack" {
-        # dist/EggCoop-<ver>.zip: our plugin + a BepInEx.cfg with HideManagerGameObject=true (the game kills the
-        # visible BepInEx manager object). BepInEx itself is downloaded by each player from GitHub.
+        # dist/EggCoop-<ver>.zip, everything a player needs, no downloads:
+        #   Установить.bat / Удалить.bat   -> installer\*.ps1 (find the game, add BepInEx if missing, copy the mod)
+        #   files\game\                     -> laid out like the game folder: BepInEx 5.4.23.5 (MIT), its config with
+        #                                      HideManagerGameObject=true (the game kills the visible manager), the plugin
+        #   Инструкция.txt, licenses\
+        $bepZip = "$root\downloads\BepInEx_win_x64_5.4.23.5.zip"
+        if (-not (Test-Path $bepZip)) {
+            New-Item -ItemType Directory -Force (Split-Path $bepZip) | Out-Null
+            Invoke-WebRequest "https://github.com/BepInEx/BepInEx/releases/download/v5.4.23.5/BepInEx_win_x64_5.4.23.5.zip" -OutFile $bepZip -UseBasicParsing
+        }
+        if ((Get-FileHash $bepZip).Hash -ne "82F9878551030F54657792C0740D9D51A09500EEAE1FBA21106B0C441E6732C4") { throw "BepInEx zip hash mismatch: $bepZip" }
         dotnet build "$root\src\EggCoop" -c Release | Select-String "error|успешно"
         $stage = "$root\dist\stage"
         Remove-Item $stage -Recurse -ErrorAction SilentlyContinue
-        New-Item -ItemType Directory -Force "$stage\BepInEx\plugins\EggCoop", "$stage\BepInEx\config" | Out-Null
+        $game = "$stage\files\game"
+        New-Item -ItemType Directory -Force "$game\BepInEx\plugins\EggCoop", "$game\BepInEx\config", "$stage\installer" | Out-Null
+        Expand-Archive $bepZip $game
+        Get-ChildItem "$game\BepInEx\core" -Filter *.xml | Remove-Item   # IntelliSense docs, not needed to play
         $out = "$root\src\EggCoop\bin\Release\net472"
-        Copy-Item "$out\EggCoop.dll", "$out\LiteNetLib.dll", "$out\Mono.Nat.dll" "$stage\BepInEx\plugins\EggCoop"
-        Copy-Item "$root\lab\p1\BepInEx\config\BepInEx.cfg" "$stage\BepInEx\config"
-        Copy-Item "$root\dist-files\*" $stage
+        Copy-Item "$out\EggCoop.dll", "$out\LiteNetLib.dll", "$out\Mono.Nat.dll" "$game\BepInEx\plugins\EggCoop"
+        Copy-Item "$root\lab\p1\BepInEx\config\BepInEx.cfg" "$game\BepInEx\config"
+        if (-not (Select-String "$game\BepInEx\config\BepInEx.cfg" -Pattern "HideManagerGameObject = true" -Quiet)) { throw "BepInEx.cfg must have HideManagerGameObject = true" }
+        Copy-Item "$root\installer\*.ps1" "$stage\installer"
+        Copy-Item "$root\installer\*.bat" $stage
+        Copy-Item "$root\dist-files\*" $stage -Recurse
         $ver = ([xml](Get-Content "$root\src\EggCoop\EggCoop.csproj")).Project.PropertyGroup.Version | Select-Object -First 1
         $zip = "$root\dist\EggCoop-$ver.zip"
         Compress-Archive "$stage\*" $zip -Force

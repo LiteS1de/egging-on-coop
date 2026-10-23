@@ -1,0 +1,4 @@
+Emote images: Twemoji 15.1
+Copyright 2019 Twitter, Inc and other contributors (graphics), maintained at https://github.com/jdecked/twemoji
+Licensed under CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Used unchanged (72x72 PNG), embedded in EggCoop.dll.

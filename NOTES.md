@@ -179,3 +179,9 @@ Owner's report and what 0.3.0 does about it:
 - NOT VERIFIED between two players (RAM: two copies hang this PC now): emotes/pings/stats over the network, events
   reaching a friend, drone pads. lab.ps1 up -solo runs one copy.
 - Ping key (owner's call): middle mouse (KeyCode.Mouse2, config PingKey) pings where the camera looks (screen centre, eggs skipped); the wheel keeps a click-to-place ping. F9 key capture accepts mouse buttons 3-7. PASS: centre ping lands ~6 m past the egg along the camera line.
+
+## One-click package (2026-10-23)
+- dist zip = Установить.bat / Удалить.bat -> installer\*.ps1 (UTF-8 BOM for Windows PowerShell 5.1), files\game\ laid out like the game folder (BepInEx 5.4.23.5 is MIT: bundled, SHA-256 pinned in lab.ps1 pack; BepInEx.cfg with HideManagerGameObject = true; plugin), licenses\.
+- Installer: game found from the unpacked location, Steam libraryfolders.vdf, else a folder dialog; elevates when the folder is not writable (Program Files); waits for the game to close; keeps an existing BepInEx and flips HideManagerGameObject in its cfg; replaces plugins\EggCoop, keeps eggcoop.cfg.
+- PASS (powershell.exe 5.1): fresh / over existing / uninstall on a fake Cyrillic path with spaces, the .bat launchers, vdf parsing, and a real run: lab p1 stripped by uninstall, reinstalled, game loaded BepInEx + EggCoop 0.5.0.
+- NOT TESTED: a real Steam install under Program Files (elevation path), SmartScreen prompt on a downloaded zip.
