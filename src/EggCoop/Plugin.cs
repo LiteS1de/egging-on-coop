@@ -121,10 +121,10 @@ namespace EggCoop
                 else if (a[i] == "-coop-breaktest") breakTest = true;
                 else if (a[i] == "-coop-gomover") goMover = true;
                 else if (a[i] == "-coop-flagtest") flagTest = true;     // replay every world event as if a friend did it, then tour them
-                else if (a[i] == "-coop-socialdemo") socialDemo = true;
-                else if (a[i] == "-coop-streamtest") streamTest = true;
-                else if (a[i] == "-coop-twitchtest") twitchTest = true;   // Twitch socket, device code and fake events, no login   // queue every viewer effect in turn and log what it changed
-                else if (a[i] == "-coop-streamer") { cfg.StreamerMode.Value = true; showLog = true; joinText = "26.12.34.56:7788"; }   // streamer-mode screenshots: menu + network log // wheel, bubble, ping and board on screen for screenshots
+                else if (a[i] == "-coop-socialdemo") socialDemo = true;   // wheel, bubble, ping and board on screen for screenshots
+                else if (a[i] == "-coop-streamtest") streamTest = true;   // queue every viewer effect in turn and log what it changed
+                else if (a[i] == "-coop-twitchtest") twitchTest = true;   // Twitch socket, device code and fake events, no login
+                else if (a[i] == "-coop-streamer") { cfg.StreamerMode.Value = true; showLog = true; joinText = "26.12.34.56:7788"; }   // streamer-mode screenshots: menu + network log
                 else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
                 else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s

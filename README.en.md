@@ -47,6 +47,7 @@
 **Connecting**
 - **Through Steam:** the host invites friends from the Steam overlay, friends click "Join game". Traffic goes through Valve's relays: works behind any router, no Radmin, no port forwarding, nobody's IP is ever shown.
 - Fallbacks: invite code, Radmin VPN or IP. If the internet blinks, a guest reconnects on its own.
+
 ## Screenshots
 
 <table>
@@ -72,12 +73,14 @@ The script finds the game in your Steam libraries (or asks for the folder with `
 > **Update** with `Установить.bat` from the new zip (nick, keys and stats are kept). **Uninstall** with `Удалить.bat`.
 
 > [!IMPORTANT]
-> All players need **the same mod version** and the same game version. Details are in `Инструкция.txt` inside the zip (Russian).
+> All players need **the same mod version** and the same game version. Joining through Steam needs **the Steam version** of the game on every PC. Details are in `Инструкция.txt` inside the zip (Russian).
 
 ## How to play
 
-1. **Host:** F9 → nick → "Создать игру" (Host) → copy the invite code or the Radmin address and send it to your friends.
-2. **Friends:** F9 → nick → paste the code or address → "Подключиться" (Join).
+1. **Host:** F9 → nick → "Создать игру" (Host) → "Пригласить друзей через Steam" (invite through Steam).
+2. **Friends:** accept the Steam invite or click "Join game" on the host in the Steam friends list. If the game is closed, Steam starts it.
+
+Without Steam: the host copies the invite code or Radmin address under F9 → "Другие способы" (other ways); friends paste it there and click "Подключиться" (Join).
 
 | Key | What it does |
 |:---:|---|
@@ -85,13 +88,15 @@ The script finds the game in your Steam libraries (or asks for the folder with `
 | <kbd>T</kbd> | teleport to a friend (with 2+ friends, pick one with a number key) |
 | <kbd>G</kbd> (hold) | emote wheel: hover an emote and release, the × in the centre closes it |
 | <kbd>mouse wheel</kbd> | ping where the camera is looking |
+| <kbd>F10</kbd> | pause viewer effects |
 
-Every key can be changed in F9 → "Клавиши" (Keys).
+Every key can be changed in F9 → "Настройки" (Settings).
 
 <details>
 <summary><b>Can't connect?</b></summary>
 
-- The most reliable way: Radmin VPN for everyone, friends enter the host's Radmin address from the F9 window.
+- The most reliable way is Steam: everyone runs the Steam version of the game, the host invites from F9.
+- Without Steam: Radmin VPN for everyone, friends enter the host's Radmin address from F9 → "Другие способы" (other ways).
 - Joining by code fails if the host runs a full-traffic VPN — the F9 window warns about it.
 - Or the host forwards port **7788/UDP** on the router.
 - The mod's log is `BepInEx\LogOutput.log` in the game folder: attach it to an [issue](https://github.com/LiteS1de/egging-on-coop/issues).
