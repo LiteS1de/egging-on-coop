@@ -87,6 +87,9 @@ switch ($cmd) {
         Save-Guard
         dotnet build "$root\src\EggCoop" -c Lab -p:Deploy=true | Select-String "error|Build succeeded|успешно"
         Start-Copy 1 "-coop-nick Host -coop-host $hostArgs"
+        # Two copies loading the world at the same time starve each other; Windows then flags one as "not responding"
+        # (happened 2026-10-23). Let the host reach the world first.
+        for ($i = 0; $i -lt 150 -and -not (Select-String "$root\lab\p1\BepInEx\LogOutput.log" -Pattern "World sync: \d+ bodies" -Quiet); $i++) { Start-Sleep 1 }
         Start-Copy 2 "-coop-nick Guest -coop-join $join $guestArgs"
     }
     "down" {

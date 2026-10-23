@@ -389,8 +389,10 @@ namespace EggCoop
             var list = Persistent.instance.saveData.brokenObjects;
             if (!list.Contains(gameId)) list.Add(gameId);
             // shortcut: the object just disappears (no shatter effect); add the RayFire demolition if it looks too abrupt.
+            int hidden = 0;
             foreach (var bo in Resources.FindObjectsOfTypeAll<BreakableObject>())
-                if (bo.ID == gameId && bo.gameObject.scene.IsValid() && bo.gameObject.activeSelf) bo.gameObject.SetActive(false);
+                if (bo.ID == gameId && bo.gameObject.scene.IsValid() && bo.gameObject.activeSelf) { bo.gameObject.SetActive(false); hidden++; }
+            Plugin.Log.LogInfo($"World sync: object {gameId} broken by a friend ({hidden} hidden here)");
         }
 
         // ------------------------------------------------------------ wire
@@ -428,6 +430,24 @@ namespace EggCoop
                 .OrderBy(x => (x.Rb.position - near).sqrMagnitude).FirstOrDefault();
             pos = b != null ? b.Rb.position : Vector3.zero;
             return b != null ? b.Id : 0;
+        }
+        // Lab: first registered body whose name contains `part` (any group size).
+        public int Find(string part, out Vector3 pos)
+        {
+            var b = bodies.Values.Where(x => x.Rb != null && x.Rb.name.IndexOf(part, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(x => x.Rb.name).FirstOrDefault();
+            pos = b != null ? b.Rb.position : Vector3.zero;
+            return b != null ? b.Id : 0;
+        }
+        // Lab: claim this body's group (as if our egg touched it) and throw the body.
+        public void Push(int id, Vector3 velocity)
+        {
+            if (!bodies.TryGetValue(id, out var b) || b.Rb == null) return;
+            b.G.TouchedAt = Time.unscaledTime;
+            Claim(b.G);
+            if (b.Rb.isKinematic) return;   // someone else holds it: the host said no
+            b.Rb.WakeUp();
+            b.Rb.velocity = velocity;
         }
         public string Describe(int id) => bodies.TryGetValue(id, out var b) && b.Rb != null
             ? System.FormattableString.Invariant($"{b.Rb.name} owner={b.G.Owner} pos=({b.Rb.position.x:F2},{b.Rb.position.y:F2},{b.Rb.position.z:F2})") : "unknown";

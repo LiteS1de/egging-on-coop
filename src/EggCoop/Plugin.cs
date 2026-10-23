@@ -105,6 +105,10 @@ namespace EggCoop
                 else if (a[i] == "-coop-menu") openMenu = true;
                 else if (a[i] == "-coop-worlddump") worldDump = true;
                 else if (a[i] == "-coop-uidump") uiDump = true;
+                else if (a[i] == "-coop-target") labTarget = next;
+                else if (a[i] == "-coop-race") race = true;
+                else if (a[i] == "-coop-breaktest") breakTest = true;
+                else if (a[i] == "-coop-gomover") goMover = true;
                 else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
                 else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s
@@ -174,7 +178,6 @@ namespace EggCoop
             if (inGame) HarmonyLib.AccessTools.Field(typeof(EggController), "afkTimeout").SetValue(World.instance.GetEgg(), 0f);
             if (inGame && openMenu && net.Active) { openMenu = false; SetMenu(true); }
             if (inGame && worldDump && Time.unscaledTime > 40f) { worldDump = false; DumpWorld(); }
-            if (inGame) WorldLabStep();
             if (inGame && rebootAt > 0 && Time.unscaledTime > rebootAt) { rebootAt = 0; Log.LogInfo("Lab: reboot to title"); Boot.instance.Reboot(null); }
             if (inGame && uiDump && Time.unscaledTime > 30f) { uiDump = false; DumpUi(); }
             if (uiDemo && toasts.Count == 0) Toast("Телепорт к Host — так выглядит оповещение");
@@ -187,33 +190,85 @@ namespace EggCoop
         // "-coop-standtest" (guest): drop onto the host's ghost from 1.5 m, then from 40 m, and log where we ended up
         // and whether the shell cracked. Read with: Select-String LogOutput.log "Lab stand"
         bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump, pushTest, worldLog, uiDump, uiDemo;
-        static int labBody, pushCount;
+        static int labBody, pushCount, breakId;
+        string labTarget;
+        bool race, breakTest, goMover, moverPlaced;
+        long lastRaceSec;
         float rebootAt;
         float nextPush, nextWorldLog;
         void WorldLabStep()
         {
             float now = Time.unscaledTime;
-            if (pushTest && !net.IsHost && net.Connected && now > nextPush && world != null && world.Count > 0)
+            if (world == null || world.Count == 0 || !net.Connected) return;
+            var me = World.instance.GetEgg().GetPosition();
+            // -coop-target NAME: go to that object once, then the push/race tests use it.
+            if (labTarget != null && labBody == 0)
+            {
+                labBody = world.Find(labTarget, out var tp);
+                Log.LogInfo($"Lab target: {labBody} {world.Describe(labBody)}");
+                if (labBody != 0) Place(tp + new Vector3(net.IsHost ? 2f : -2f, 1.5f, 0f));
+                nextPush = now + 8f;   // let both eggs land
+            }
+            if (pushTest && !net.IsHost && now > nextPush)
             {
                 nextPush = now + 12f;
-                if (++pushCount % 2 == 1) { labBody = world.TestPush(World.instance.GetEgg().GetPosition()); Log.LogInfo($"Lab push: {labBody} {world.Describe(labBody)}"); }
+                if (labTarget != null) { world.Push(labBody, new Vector3(Random.Range(-3f, 3f), 2f, Random.Range(-3f, 3f))); Log.LogInfo($"Lab push: {labBody} {world.Describe(labBody)}"); }
+                else if (++pushCount % 2 == 1) { labBody = world.TestPush(me); Log.LogInfo($"Lab push: {labBody} {world.Describe(labBody)}"); }
                 else
                 {
                     // Real path: drop our egg on the object; the collision must claim it.
-                    labBody = world.Nearest(World.instance.GetEgg().GetPosition(), out var bp);
+                    labBody = world.Nearest(me, out var bp);
                     Place(bp + Vector3.up * 1.5f);
                     Log.LogInfo($"Lab drop on: {labBody} {world.Describe(labBody)}");
                 }
             }
-            if (worldLog && now > nextWorldLog && world != null)
+            // -coop-race: host and guest throw the same object in opposite directions at the same wall-clock second.
+            if (race && labBody != 0 && now > nextPush)
             {
-                nextWorldLog = now + 2f;
+                long sec = System.DateTimeOffset.Now.ToUnixTimeSeconds();
+                if (sec % 12 == 0 && sec != lastRaceSec)
+                {
+                    lastRaceSec = sec;
+                    world.Push(labBody, new Vector3(net.IsHost ? 3f : -3f, 2f, 0f));
+                    Log.LogInfo($"Lab race push at {sec}: {world.Describe(labBody)}");
+                }
+            }
+            // -coop-breaktest (guest): slam onto the nearest unbroken breakable object.
+            if (breakTest && !net.IsHost && now > nextPush)
+            {
+                nextPush = now + 15f;
+                if (breakId != 0)
+                {
+                    bool gone = Persistent.instance.saveData.brokenObjects.Contains(breakId);
+                    Log.LogInfo($"Lab break result: {breakId} broken here={gone}");
+                }
+                var all = Resources.FindObjectsOfTypeAll<BreakableObject>().Where(x => x.gameObject.scene.IsValid()).ToList();
+                var bo = all.Where(x => x.gameObject.activeInHierarchy && !Persistent.instance.saveData.brokenObjects.Contains(x.ID))
+                    .OrderBy(x => (x.transform.position - me).sqrMagnitude).FirstOrDefault();
+                if (bo == null) Log.LogInfo($"Lab break: no target ({all.Count} breakables, {all.Count(x => x.gameObject.activeInHierarchy)} active)");
+                if (bo != null)
+                {
+                    breakId = bo.ID;
+                    Place(bo.transform.position + Vector3.up * 2.5f);
+                    World.instance.GetEgg().SetVelocities(Vector3.down * 16f, Vector3.zero);
+                    Log.LogInfo($"Lab break: slam on {bo.name} id={bo.ID}");
+                }
+            }
+            // -coop-gomover: both stand next to the first platform and log it twice a second.
+            if (goMover && !moverPlaced)
+            {
+                moverPlaced = true;
+                var m = Resources.FindObjectsOfTypeAll<KinematicCurveMovement>().Where(x => x.gameObject.scene.IsValid()).OrderBy(x => x.name).FirstOrDefault();
+                if (m != null) { Place(m.transform.position + new Vector3(net.IsHost ? 4f : -4f, 3f, 0f)); Log.LogInfo($"Lab mover: {m.name}"); }
+            }
+            if (worldLog && now > nextWorldLog)
+            {
+                nextWorldLog = now + (goMover ? 0.5f : 2f);
                 var mover = Resources.FindObjectsOfTypeAll<KinematicCurveMovement>().Where(m => m.gameObject.scene.IsValid()).OrderBy(m => m.name).FirstOrDefault();
                 var mp = mover != null ? mover.transform.position : Vector3.zero;
                 Log.LogInfo(System.FormattableString.Invariant($"Lab world t={System.DateTimeOffset.Now.ToUnixTimeMilliseconds()} clock={SharedClock.Time:F2} off={SharedClock.Offset:F2} mover=({mp.x:F2},{mp.y:F2},{mp.z:F2}) body={(labBody != 0 ? labBody : world.LastRemoteBody)} {world.Describe(labBody != 0 ? labBody : world.LastRemoteBody)}"));
             }
         }
-
         // UI recon: the game's fonts, the sprites its menus draw with (saved as PNG) and its text colours.
         void DumpUi()
         {
@@ -337,6 +392,9 @@ namespace EggCoop
         void RunTestArgs(bool inGame)
         {
             LabStep(inGame);
+#if LAB
+            if (inGame) WorldLabStep();   // every frame: the race test must fire on the exact wall-clock second
+#endif
 #if LAB
             if (testMode != null && inGame && crackFirst)
             {

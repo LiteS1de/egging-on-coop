@@ -149,3 +149,13 @@ Owner's report and what 0.3.0 does about it:
   are unknown here (different game build). Old hosts send no version: check skipped (compatible with 0.4.x).
 - Update/FixedUpdate/OnGUI and network handlers are guarded: an exception is logged (each distinct one at most every
   10 s) instead of stopping the mod.
+
+## World sync lab checks (2026-10-23, 0.4.4 + lab-only scenarios)
+- PASS hinged pots (`-coop-target big_pot -coop-pushtest -coop-worldlog`): host follows the guest's swings, final
+  poses match within 1 cm.
+- PASS claim race (`-coop-target QuackTheBucket -coop-race` on both): both push the same bucket in the same second in
+  opposite directions; one owner wins on both sides (guest), final pose identical (27.82, 0.04, 4.88), released on both.
+- NOT RUN: breakables (`-coop-breaktest`) and platform phase (`-coop-gomover -coop-worldlog`). Two copies no longer fit
+  in RAM next to the owner's other apps: the guest copy loaded at 1 frame / 15 s and hung twice even with the host
+  loading first (lab.ps1 now waits for "World sync: N bodies" on p1). Check both in a real session instead: a bottle
+  someone breaks must vanish for everyone; a moving platform must be at the same spot on both screens.
