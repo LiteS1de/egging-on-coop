@@ -29,7 +29,6 @@ namespace EggCoop
         int skin = int.MinValue;
         bool yolkNow, snapped = true, hasSeq;
         byte tpSeq;
-        float collideAfter;
         Material localSkinMaterial;
 
         // Our shell must exist and not be the one flying apart after a full crack (that one is replaced shortly).
@@ -163,20 +162,15 @@ namespace EggCoop
             {
                 buffer.Clear();
                 snapped = true;   // jump there without sweeping through anything on the way
-                PauseCollisions();
             }
             buffer.Add((now, s));
             if (buffer.Count > 30) buffer.RemoveAt(0);
             if (s.skin != skin) ApplySkin(s.skin);
         }
 
-        // After a teleport (theirs or ours) let the teleporter land first; then the softened contacts slide two
-        // overlapping eggs apart gently (waiting for them to separate on their own left eggs inside each other).
-        public void PauseCollisions()
-        {
-            col.enabled = false;
-            collideAfter = Time.unscaledTime + 1.5f;
-        }
+        // Highest point of the friend's egg in the world (its collider when solid, else an egg's height above the centre).
+        public float TopY => col.enabled ? col.bounds.max.y : Position.y + 0.5f;
+
 
         // Speed of the friend from the two newest snapshots, m/s.
         public float Speed
@@ -222,10 +216,8 @@ namespace EggCoop
             shell.SetActive(!yolkNow);
             yolk.SetActive(yolkNow);
 
-            // Collide only with an intact friend, only if the host allows it, and not right after a teleport.
-            bool want = Collide && !yolkNow;
-            if (!want) col.enabled = false;
-            else if (!col.enabled && Time.unscaledTime >= collideAfter) col.enabled = true;
+            // Collide only with an intact friend and only if the host allows it.
+            col.enabled = Collide && !yolkNow;
             // The game's own "FallCancel" tag caps impact damage below the crack threshold.
             string tag = CrackOnHit ? "Untagged" : "FallCancel";
             if (col.tag != tag) col.tag = tag;

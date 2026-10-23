@@ -19,7 +19,7 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.4.3";
+        public const string Version = "0.4.4";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -508,11 +508,13 @@ namespace EggCoop
                 : null;
             if (msg == null)
             {
-                // Land on the friend's spot with collisions paused on both sides (tpSeq tells them): dropping onto a
-                // lying friend used to launch one of you. Falling friends are fine too: you get their current spot.
-                Place(g.Position + Vector3.up);
+                // Appear just above the friend (15 cm gap) and drop onto them with collisions on: nothing overlaps, so
+                // nothing gets launched, and the softened ghost contacts keep the landing gentle. tpSeq makes the
+                // friend's copy of us jump straight there instead of sweeping through the level.
+                float half = World.instance.GetEggCore().eggCollider is MeshCollider mc && mc.sharedMesh != null
+                    ? mc.sharedMesh.bounds.extents.y * mc.transform.lossyScale.y : 0.45f;   // we land upright (Place resets rotation)
+                Place(new Vector3(g.Position.x, Mathf.Max(g.TopY, g.Position.y) + half + 0.15f, g.Position.z));
                 tpSeq++;
-                foreach (var o in ghosts.Values) o.PauseCollisions();
                 tpCounts[g.Nick] = (tpCounts.TryGetValue(g.Nick, out var n) ? n : 0) + 1;
                 cfg.TpStats.Value = string.Join(";", tpCounts.Select(kv => $"{kv.Key}:{kv.Value}"));
                 msg = g.Yolk ? $"Телепорт к {g.Nick} — он разбит, вы у его желтка" : $"Телепорт к {g.Nick}";
@@ -537,14 +539,15 @@ namespace EggCoop
 #if LAB
         // Peak speed of our own egg in the 4 s after a teleport: a kick shows as 8+ m/s, a plain 1 m drop as ~4.
         float peak, peakUntil; string peakLabel;
-        void WatchPeak(string label) { peak = 0; peakUntil = Time.unscaledTime + 6f; peakLabel = label; }
+        void WatchPeak(string label) { peak = 0; peakUntil = Time.unscaledTime + 4f; peakLabel = label; }
         void MeasurePeak()
         {
             if (peakUntil <= 0) return;
             if (InGame()) peak = Mathf.Max(peak, World.instance.GetEgg().GetVelocity().magnitude);
             if (Time.unscaledTime < peakUntil) return;
             var near = InGame() && ghosts.Count > 0 ? Vector3.Distance(World.instance.GetEgg().GetPosition(), ghosts.Values.First().Position) : -1f;
-            Log.LogInfo(System.FormattableString.Invariant($"Lab peak: {peakLabel} {peak:0.0} m/s, friend {near:0.00} m away"));
+            var dy = InGame() && ghosts.Count > 0 ? World.instance.GetEgg().GetPosition().y - ghosts.Values.First().Position.y : 0f;
+            Log.LogInfo(System.FormattableString.Invariant($"Lab peak: {peakLabel} {peak:0.0} m/s, friend {near:0.00} m away, {dy:+0.00;-0.00} m above"));
             peakUntil = 0;
         }
 #endif
