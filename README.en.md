@@ -57,7 +57,7 @@
   </tr>
   <tr>
     <td width="50%"><img src="docs/demo-wheel.gif" alt="Emotes on the move"><p align="center"><sub>Emotes on the move</sub></p></td>
-    <td width="50%"><img src="docs/demo-ice.gif" alt="Emotes and pings in the ice level"><p align="center"><sub>Emotes and pings in the ice level</sub></p></td>
+    <td width="50%"><img src="docs/demo-teleport.gif" alt="Teleport to a friend — T"><p align="center"><sub>Teleport to a friend — T</sub></p></td>
   </tr>
 </table>
 

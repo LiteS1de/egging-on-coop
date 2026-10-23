@@ -54,7 +54,7 @@
   </tr>
   <tr>
     <td width="50%"><img src="docs/demo-wheel.gif" alt="Эмоции на ходу"><p align="center"><sub>Эмоции на ходу</sub></p></td>
-    <td width="50%"><img src="docs/demo-ice.gif" alt="Эмоции и метки на ледяном уровне"><p align="center"><sub>Эмоции и метки на ледяном уровне</sub></p></td>
+    <td width="50%"><img src="docs/demo-teleport.gif" alt="Телепорт к другу — T"><p align="center"><sub>Телепорт к другу — T</sub></p></td>
   </tr>
 </table>
 
