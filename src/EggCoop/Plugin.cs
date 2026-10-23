@@ -96,7 +96,8 @@ namespace EggCoop
                 else if (a[i] == "-coop-standtest") { standTest = true; PatchCrackLog(); }
                 else if (a[i] == "-coop-hitlog") PatchCrackLog();   // log friend hits and what caused each crack
                 else if (a[i] == "-coop-tptest") tpTest = true;
-                else if (a[i] == "-coop-menu") openMenu = true;   // F9 open on arrival, for screenshots
+                else if (a[i] == "-coop-menu") openMenu = true;
+                else if (a[i] == "-coop-worlddump") worldDump = true;   // F9 open on arrival, for screenshots
                 else if (a[i] == "-coop-crackfirst") crackFirst = true;   // join right after our shell rebuilds: the ghost is built then
 #endif
             }
@@ -161,6 +162,7 @@ namespace EggCoop
             // The game pauses itself after 5 min with no buttons pressed (EggController.afkTimeout); long lab runs must not.
             if (inGame) HarmonyLib.AccessTools.Field(typeof(EggController), "afkTimeout").SetValue(World.instance.GetEgg(), 0f);
             if (inGame && openMenu && net.Active) { openMenu = false; SetMenu(true); }
+            if (inGame && worldDump && Time.unscaledTime > 40f) { worldDump = false; DumpWorld(); }
             if (inGame && standTest && !net.IsHost) StandTestStep();
             if (inGame && tpTest && !net.IsHost && ghosts.Count > 0) { var g = ghosts.Values.First(); Log.LogInfo($"Lab tp: {TryTeleport(g)}"); nextLabStep += 9f; }
 #endif
@@ -169,7 +171,22 @@ namespace EggCoop
 #if LAB
         // "-coop-standtest" (guest): drop onto the host's ghost from 1.5 m, then from 40 m, and log where we ended up
         // and whether the shell cracked. Read with: Select-String LogOutput.log "Lab stand"
-        bool noShove, standTest, tpTest, crackFirst, openMenu;
+        bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump;
+
+        // Stage 4 recon: what moves in this world and how the game identifies it.
+        void DumpWorld()
+        {
+            var holders = Resources.FindObjectsOfTypeAll<RigidDataHolder>().Where(h => h.gameObject.scene.IsValid()).ToList();
+            Log.LogInfo($"World: {holders.Count} RigidDataHolders, {holders.Select(h => h.ID).Distinct().Count()} distinct IDs, {holders.Count(h => h.ID < 0)} without ID");
+            foreach (var grp in holders.GroupBy(h => h.GetType().Name).OrderByDescending(g => g.Count())) Log.LogInfo($"World:   {grp.Key} x{grp.Count()}");
+            var held = new HashSet<Rigidbody>(holders.Select(h => h.rb));
+            var loose = Resources.FindObjectsOfTypeAll<Rigidbody>().Where(r => r.gameObject.scene.IsValid() && !r.isKinematic && !held.Contains(r)).ToList();
+            Log.LogInfo($"World: {loose.Count} other dynamic rigidbodies");
+            foreach (var grp in loose.GroupBy(r => string.Join("+", r.GetComponents<MonoBehaviour>().Where(m => m != null).Select(m => m.GetType().Name).DefaultIfEmpty("(none)"))).OrderByDescending(g => g.Count()).Take(25))
+                Log.LogInfo($"World:   {grp.Key} x{grp.Count()}  e.g. {grp.First().name}");
+            var movers = Resources.FindObjectsOfTypeAll<KinematicCurveMovement>().Count(m => m.gameObject.scene.IsValid());
+            Log.LogInfo($"World: {movers} KinematicCurveMovement, {Resources.FindObjectsOfTypeAll<OneTimeEvent>().Count(m => m.gameObject.scene.IsValid())} OneTimeEvent");
+        }
 
         // Which collider the egg hit last, so a crack can be blamed on the friend or on the floor.
         static string lastHit = "-";
