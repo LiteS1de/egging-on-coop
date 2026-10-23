@@ -49,11 +49,16 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/wheel.png" alt="Колесо эмоций"><p align="center"><sub>Колесо эмоций — зажать G</sub></p></td>
-    <td width="50%"><img src="docs/ping.png" alt="Метка"><p align="center"><sub>Метка и эмоция над яйцом</sub></p></td>
+    <td width="50%"><img src="docs/emotes.jpg" alt="Эмоции над яйцами"><p align="center"><sub>Эмоции над яйцами — у друга и у вас</sub></p></td>
+    <td width="50%"><img src="docs/ping.jpg" alt="Метка"><p align="center"><sub>Метка с ником и расстоянием</sub></p></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/shame-board.png" alt="Доска позора"><p align="center"><sub>Окно F9: доска позора и клавиши</sub></p></td>
+    <td width="50%"><img src="docs/wheel.png" alt="Колесо эмоций"><p align="center"><sub>Колесо эмоций — зажать G</sub></p></td>
+    <td width="50%"><img src="docs/f9-board.png" alt="Доска позора"><p align="center"><sub>F9 → «Доска»: кто сколько упал</sub></p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/f9-game.png" alt="Вкладка Игра"><p align="center"><sub>F9 → «Игра»: приглашение через Steam, режим стримера прячет адреса</sub></p></td>
+    <td width="50%"><img src="docs/f9-stream.png" alt="Вкладка Стрим"><p align="center"><sub>F9 → «Стрим»: эффекты от зрителей Twitch, цены и откаты</sub></p></td>
   </tr>
 </table>
 

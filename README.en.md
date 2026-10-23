@@ -52,11 +52,16 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/wheel.png" alt="Emote wheel"><p align="center"><sub>Emote wheel — hold G</sub></p></td>
-    <td width="50%"><img src="docs/ping.png" alt="Ping"><p align="center"><sub>A ping and an emote over the egg</sub></p></td>
+    <td width="50%"><img src="docs/emotes.jpg" alt="Emotes over the eggs"><p align="center"><sub>Emotes over the eggs — a friend's and yours</sub></p></td>
+    <td width="50%"><img src="docs/ping.jpg" alt="Ping"><p align="center"><sub>A ping with the nick and the distance</sub></p></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/shame-board.png" alt="Shame board"><p align="center"><sub>The F9 window: shame board and key bindings</sub></p></td>
+    <td width="50%"><img src="docs/wheel.png" alt="Emote wheel"><p align="center"><sub>Emote wheel — hold G</sub></p></td>
+    <td width="50%"><img src="docs/f9-board.png" alt="Shame board"><p align="center"><sub>F9 → "Доска" (board): who fell how far</sub></p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/f9-game.png" alt="Game tab"><p align="center"><sub>F9 → "Игра" (game): Steam invite, streamer mode hides addresses</sub></p></td>
+    <td width="50%"><img src="docs/f9-stream.png" alt="Stream tab"><p align="center"><sub>F9 → "Стрим" (stream): Twitch viewer effects, prices and cooldowns</sub></p></td>
   </tr>
 </table>
 
