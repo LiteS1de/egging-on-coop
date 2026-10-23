@@ -63,6 +63,8 @@ namespace EggCoop
             net.OnState += (id, s) => pending[id] = s;
             net.OnLeave += RemoveGhost;
             net.OnSettings += ApplyHostSettings;
+            net.OnEnded += Toast;
+            Application.quitting += () => net.Stop();   // tell friends right away instead of letting them time out
             ApplyOwnSettings();
             ReadTestArgs();
             if (dataDir != null) IsolateData();
@@ -239,6 +241,8 @@ namespace EggCoop
                 try { Persistent.instance.SetOptionValue(key, value); } catch (System.Exception) { }   // stored anyway; applied on next start
                 applied.Add($"{key}={value}");
             }
+            // Two copies at full volume at once are loud; owner asked for 30 %.
+            if (Persistent.instance.GetOptionValue(OptionType.MasterVolume) != 30) { Persistent.instance.SetOptionValue(OptionType.MasterVolume, 30); applied.Add("MasterVolume=30"); }
             Log.LogInfo("Lab: low preset " + (applied.Count > 0 ? string.Join(" ", applied) : "already set"));
         }
 
@@ -399,13 +403,12 @@ namespace EggCoop
         {
             string msg = !InGame() ? "Телепорт работает только в игре"
                 : !g.Fresh ? $"{g.Nick}: нет связи — телепорт невозможен"
-                : g.Speed > 4f ? $"{g.Nick} сейчас летит — подожди, пока приземлится"
                 : World.instance.GetEggCore().freeze ? "Ваше яйцо ещё не готово"
                 : null;
             if (msg == null)
             {
-                // Land on the friend's spot with collisions off on both sides (tpSeq tells them) until the eggs are
-                // apart: dropping onto a lying friend used to launch one of you.
+                // Land on the friend's spot with collisions paused on both sides (tpSeq tells them): dropping onto a
+                // lying friend used to launch one of you. Falling friends are fine too: you get their current spot.
                 Place(g.Position + Vector3.up);
                 tpSeq++;
                 foreach (var o in ghosts.Values) o.PauseCollisions();
@@ -433,13 +436,14 @@ namespace EggCoop
 #if LAB
         // Peak speed of our own egg in the 4 s after a teleport: a kick shows as 8+ m/s, a plain 1 m drop as ~4.
         float peak, peakUntil; string peakLabel;
-        void WatchPeak(string label) { peak = 0; peakUntil = Time.unscaledTime + 4f; peakLabel = label; }
+        void WatchPeak(string label) { peak = 0; peakUntil = Time.unscaledTime + 6f; peakLabel = label; }
         void MeasurePeak()
         {
             if (peakUntil <= 0) return;
             if (InGame()) peak = Mathf.Max(peak, World.instance.GetEgg().GetVelocity().magnitude);
             if (Time.unscaledTime < peakUntil) return;
-            Log.LogInfo(System.FormattableString.Invariant($"Lab peak: {peakLabel} {peak:0.0} m/s"));
+            var near = InGame() && ghosts.Count > 0 ? Vector3.Distance(World.instance.GetEgg().GetPosition(), ghosts.Values.First().Position) : -1f;
+            Log.LogInfo(System.FormattableString.Invariant($"Lab peak: {peakLabel} {peak:0.0} m/s, friend {near:0.00} m away"));
             peakUntil = 0;
         }
 #endif
@@ -590,7 +594,6 @@ namespace EggCoop
                 s += $"  {Vector3.Distance(me, g.Position):0} м" + (Mathf.Abs(dy) > 2 ? (dy > 0 ? $" ↑{dy:0}" : $" ↓{-dy:0}") : "");
             }
             if (g.Yolk) s += "  (разбит)";
-            else if (g.Speed > 4f) s += "  (летит)";
             return s;
         }
 

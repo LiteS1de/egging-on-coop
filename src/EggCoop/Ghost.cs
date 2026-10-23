@@ -10,7 +10,6 @@ namespace EggCoop
     public class Ghost
     {
         const float SnapDistance = 8f;
-        const float ApartDistance = 1.3f;   // egg centres further apart than this cannot overlap (eggs are < 0.9 m)
         const float MaxPenetration = 0.01f;
         public static float Delay = 0.1f;   // render this far in the past so there is always a next snapshot
         public static bool Collide = true, CrackOnHit;   // the host's choice, see CoopNet.OnSettings
@@ -171,11 +170,12 @@ namespace EggCoop
             if (s.skin != skin) ApplySkin(s.skin);
         }
 
-        // After a teleport (theirs or ours) the two eggs may overlap: no collisions until they have moved apart.
+        // After a teleport (theirs or ours) let the teleporter land first; then the softened contacts slide two
+        // overlapping eggs apart gently (waiting for them to separate on their own left eggs inside each other).
         public void PauseCollisions()
         {
             col.enabled = false;
-            collideAfter = Time.unscaledTime + 0.5f;
+            collideAfter = Time.unscaledTime + 1.5f;
         }
 
         // Speed of the friend from the two newest snapshots, m/s.
@@ -222,15 +222,10 @@ namespace EggCoop
             shell.SetActive(!yolkNow);
             yolk.SetActive(yolkNow);
 
-            // Collide only with an intact friend, only if the host allows it, and never switch the collider on while it
-            // may overlap our egg (spawn points, teleports): even softened, starting inside each other looks wrong.
+            // Collide only with an intact friend, only if the host allows it, and not right after a teleport.
             bool want = Collide && !yolkNow;
             if (!want) col.enabled = false;
-            else if (!col.enabled && Time.unscaledTime >= collideAfter)
-            {
-                var egg = World.instance != null ? World.instance.GetEgg() : null;
-                if (egg == null || (egg.GetPosition() - body.position).magnitude > ApartDistance) col.enabled = true;
-            }
+            else if (!col.enabled && Time.unscaledTime >= collideAfter) col.enabled = true;
             // The game's own "FallCancel" tag caps impact damage below the crack threshold.
             string tag = CrackOnHit ? "Untagged" : "FallCancel";
             if (col.tag != tag) col.tag = tag;

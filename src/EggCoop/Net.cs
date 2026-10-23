@@ -43,7 +43,9 @@ namespace EggCoop
         public int PlayerCount => IsHost ? manager.ConnectedPeersCount + 1 : (hostPeer != null ? remoteIds.Count + 1 : 0);
         public event Action<int, EggState> OnState;
         public event Action<int> OnLeave;
-        public event Action<bool, bool> OnSettings;   // (collide, crackOnHit) chosen by the host
+        public event Action<bool, bool> OnSettings;
+        public event Action<string> OnEnded;   // the session ended on its own (host gone, join failed)
+        string endReason;   // (collide, crackOnHit) chosen by the host
         public readonly List<string> Log = new List<string>();
         public readonly Dictionary<int, int> Ping = new Dictionary<int, int>();   // player id -> ms (host: every guest; guest: only the host, id 0)
 
@@ -232,6 +234,7 @@ namespace EggCoop
         {
             if (manager == null) return;
             manager.PollEvents();
+            if (endReason != null) { var why = endReason; endReason = null; Stop(); OnEnded?.Invoke(why); return; }
             float now = Time.unscaledTime;
             if (punchTargets.Count > 0 && now >= nextPunch)
             {
@@ -324,10 +327,14 @@ namespace EggCoop
             }
             else if (peer == hostPeer || hostPeer == null)
             {
-                Say(hostPeer == null ? $"Не удалось подключиться ({info.Reason})" : $"Связь с хостом потеряна ({info.Reason})");
+                string why = hostPeer == null ? $"Не удалось подключиться ({info.Reason})" : $"Хост вышел или пропал ({info.Reason}) — сессия завершена";
+                Say(why);
                 hostPeer = null;
                 foreach (var id in remoteIds) OnLeave?.Invoke(id);
                 remoteIds.Clear();
+                // A guest without a host is not in a session any more; end it (after PollEvents, not inside it),
+                // unless another route to the host (LAN / public) is still being tried.
+                if (manager.GetPeersCount(ConnectionState.Outgoing) == 0) { endReason = why; }
             }
         }
 
