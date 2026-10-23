@@ -18,7 +18,7 @@ namespace EggCoop
 
         class EffectDef
         {
-            public string Id, Name, Group;
+            public string Id, Name, Group, Desc;   // Desc: the tooltip in F9
             public float Duration;          // 0 = instant
             public int Points, Bits, Cooldown;
         }
@@ -26,16 +26,16 @@ namespace EggCoop
         // Default prices: channel points come at ~300-500 an hour per viewer, 1 bit is about 1 cent.
         static readonly EffectDef[] Effects =
         {
-            new EffectDef { Id = "emote", Name = "Эмоция от зрителя", Group = "Безобидные", Points = 100, Bits = 10, Cooldown = 10 },
-            new EffectDef { Id = "confetti", Name = "Конфетти", Group = "Безобидные", Points = 200, Bits = 20, Cooldown = 20 },
-            new EffectDef { Id = "wind", Name = "Порыв ветра", Group = "Толчки", Points = 500, Bits = 50, Cooldown = 30 },
-            new EffectDef { Id = "hop", Name = "Подпрыгнуть", Group = "Толчки", Points = 400, Bits = 40, Cooldown = 30 },
-            new EffectDef { Id = "moon", Name = "Лунная гравитация", Group = "Хаос", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
-            new EffectDef { Id = "slowmo", Name = "Замедление", Group = "Хаос", Duration = 10, Points = 1500, Bits = 150, Cooldown = 90 },
-            new EffectDef { Id = "ice", Name = "Скользкое яйцо", Group = "Хаос", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
-            new EffectDef { Id = "flip", Name = "Камера вверх ногами", Group = "Хаос", Duration = 10, Points = 2000, Bits = 200, Cooldown = 120 },
-            new EffectDef { Id = "tofriend", Name = "Телепорт к другу", Group = "Кооператив", Points = 2500, Bits = 250, Cooldown = 180 },
-            new EffectDef { Id = "pullfriend", Name = "Друга — к стримеру", Group = "Кооператив", Points = 2500, Bits = 250, Cooldown = 180 },
+            new EffectDef { Id = "emote", Name = "Эмоция от зрителя", Desc = "Над вашим яйцом на 3,5 с всплывает случайная эмоция с ником зрителя. Её видят и друзья. На игру не влияет.", Group = "Безобидные", Points = 100, Bits = 10, Cooldown = 10 },
+            new EffectDef { Id = "confetti", Name = "Конфетти", Desc = "Около трёх секунд на экран сыплется конфетти. На игру не влияет.", Group = "Безобидные", Points = 200, Bits = 20, Cooldown = 20 },
+            new EffectDef { Id = "wind", Name = "Порыв ветра", Desc = "Толкает яйцо в случайную сторону (около 3,5 м/с вбок и немного вверх). Может сдвинуть с края.", Group = "Толчки", Points = 500, Bits = 50, Cooldown = 30 },
+            new EffectDef { Id = "hop", Name = "Подпрыгнуть", Desc = "Подбрасывает яйцо прямо вверх примерно на полметра.", Group = "Толчки", Points = 400, Bits = 40, Cooldown = 30 },
+            new EffectDef { Id = "moon", Name = "Лунная гравитация", Desc = "На 15 с гравитация втрое слабее: прыжки выше, падения медленнее. Действует на всю физику у вас в игре.", Group = "Хаос", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
+            new EffectDef { Id = "slowmo", Name = "Замедление", Desc = "На 10 с вся игра у вас идёт на 60 % скорости. У друзей время не меняется.", Group = "Хаос", Duration = 10, Points = 1500, Bits = 150, Cooldown = 90 },
+            new EffectDef { Id = "ice", Name = "Скользкое яйцо", Desc = "На 15 с у яйца пропадает трение: оно скользит, как по льду, и хуже держится на склонах.", Group = "Хаос", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
+            new EffectDef { Id = "flip", Name = "Камера вверх ногами", Desc = "На 10 с картинка переворачивается вверх ногами. Управление остаётся прежним.", Group = "Хаос", Duration = 10, Points = 2000, Bits = 200, Cooldown = 120 },
+            new EffectDef { Id = "tofriend", Name = "Телепорт к другу", Desc = "Переносит вас к случайному другу, как телепорт на T. Если друзей нет в сети, эффект ждёт минуту, потом баллы возвращаются.", Group = "Кооператив", Points = 2500, Bits = 250, Cooldown = 180 },
+            new EffectDef { Id = "pullfriend", Name = "Друга — к стримеру", Desc = "Переносит случайного друга к вам. Только для друзей, которые разрешили это у себя в F9 → «Стрим».", Group = "Кооператив", Points = 2500, Bits = 250, Cooldown = 180 },
         };
 
         class EffectCfg { public ConfigEntry<bool> On; public ConfigEntry<int> Points, Bits, Cooldown; }
@@ -245,9 +245,9 @@ namespace EggCoop
                 GUILayout.EndHorizontal();
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("", sDim, GUILayout.Width(230));
-                GUILayout.Label("баллы", sDim, GUILayout.Width(62));
-                GUILayout.Label("bits", sDim, GUILayout.Width(52));
-                GUILayout.Label("откат", sDim, GUILayout.Width(46));
+                GUILayout.Label(new GUIContent("баллы", "Цена в баллах канала. 0 — эффект не продаётся за баллы."), sDim, GUILayout.Width(62));
+                GUILayout.Label(new GUIContent("bits", "Цена в bits. Зритель пишет в сообщении с bits название эффекта. 0 — не продаётся за bits."), sDim, GUILayout.Width(52));
+                GUILayout.Label(new GUIContent("откат", "Сколько секунд эффект нельзя заказать снова после срабатывания."), sDim, GUILayout.Width(46));
                 GUILayout.EndHorizontal();
                 string group = null;
                 foreach (var d in Effects)
@@ -256,7 +256,7 @@ namespace EggCoop
                     var c = effCfg[d.Id];
                     GUILayout.BeginHorizontal();
                     float left = streamQ.CooldownLeft(d.Id, Time.unscaledTime);
-                    c.On.Value = EggToggleW(c.On.Value, d.Name + (Active(d.Id) ? " ●" : left > 0 ? $" ({left:0})" : ""), 230);
+                    c.On.Value = EggToggleW(c.On.Value, d.Name + (Active(d.Id) ? " ●" : left > 0 ? $" ({left:0})" : ""), 230, d.Desc);
                     c.Points.Value = IntField(c.Points.Value, 58);
                     c.Bits.Value = IntField(c.Bits.Value, 48);
                     c.Cooldown.Value = IntField(c.Cooldown.Value, 42);
@@ -268,6 +268,25 @@ namespace EggCoop
             }
             allowPull.Value = EggToggle(allowPull.Value, "Друзья-стримеры могут переносить меня к себе (эффект их зрителей)");
         }
+
+        // The hovered control's tooltip as a small panel next to the mouse, kept inside the window. Call last in the window.
+        void DrawTooltip(Rect window)
+        {
+            var m = Event.current.mousePosition;
+#if LAB
+            if (labTip != null) { GUI.tooltip = labTip; m = labTipAt; }
+#endif
+            if (string.IsNullOrEmpty(GUI.tooltip)) return;
+            var content = new GUIContent(GUI.tooltip);
+            float w = Mathf.Min(300f, window.width - 20f), h = sTip.CalcHeight(content, w);
+            float x = Mathf.Clamp(m.x + 16f, 6f, window.width - w - 6f), y = m.y + 20f;
+            if (y + h > window.height - 6f) y = m.y - h - 8f;   // no room below: show it above the cursor
+            GUI.Box(new Rect(x, y, w, h), content, sTip);
+        }
+
+#if LAB
+        string labTip; Vector2 labTipAt;   // lab screenshots: a tooltip as if the mouse were there
+#endif
 
         void SetStreamPaused(bool p)
         {
@@ -281,9 +300,9 @@ namespace EggCoop
             return int.TryParse(s, out var n) && n >= 0 ? n : s.Length == 0 ? 0 : v;
         }
 
-        bool EggToggleW(bool value, string text, float width)
+        bool EggToggleW(bool value, string text, float width, string tip = null)
         {
-            bool clicked = GUILayout.Button(text, sToggle, GUILayout.Width(width));
+            bool clicked = GUILayout.Button(new GUIContent(text, tip), sToggle, GUILayout.Width(width));
             var r = GUILayoutUtility.GetLastRect();
             var icon = value ? eggIcon : eggOff;
             if (icon != null) GUI.DrawTexture(new Rect(r.x + 4, r.y + (r.height - 18) / 2, 18, 18), icon, ScaleMode.ScaleToFit);

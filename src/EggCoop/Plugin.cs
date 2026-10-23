@@ -209,7 +209,8 @@ namespace EggCoop
             Log.LogInfo(System.FormattableString.Invariant($"Lab stream: g={Physics.gravity.y:0.00} ts={Time.timeScale:0.00} mat={(core.eggCollider.sharedMaterial != null ? core.eggCollider.sharedMaterial.name : "-")} v={core.eggRigidbody.velocity.magnitude:0.0} active={string.Join(",", activeUntil.Keys)} queue={streamQ.Count} yolk={core.yolkState}"));
             if (streamStep == 0) { streamEffects.Value = true; streamGap.Value = 4; }
             if (streamStep < Effects.Length) Log.LogInfo($"Lab stream: request {Effects[streamStep].Id} -> {RequestEffect(Effects[streamStep].Id, "zritel_test", "test")}");
-            else if (streamStep == Effects.Length + 8) { SetMenu(true); menuTab = 2; }
+            else if (streamStep == Effects.Length + 8) { SetMenu(true); menuTab = 2; streamEffects.Value = true; }
+            else if (streamStep == Effects.Length + 9) { labTip = Effects[4].Desc; labTipAt = new Vector2(200f, 380f); }
             streamStep++;
         }
         int flagPhase;
@@ -517,7 +518,7 @@ namespace EggCoop
         bool showLog;
         List<string> hostAddrs;
         readonly List<(string text, float until)> toasts = new List<(string, float)>();
-        GUIStyle sWin, sHead, sText, sDim, sBtn, sTabOn, sToast, sPanel, sToggle;
+        GUIStyle sWin, sHead, sText, sDim, sBtn, sTabOn, sToast, sPanel, sToggle, sTip;
         Vector2 menuScroll;
         float menuContentHeight = 600;   // measured each repaint; the scroll area is this tall, capped by the screen
 
@@ -846,6 +847,8 @@ namespace EggCoop
             sToast = new GUIStyle(GUI.skin.box) { font = font, fontSize = 16, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(40, 18, 9, 9), border = panelBorder, richText = true };
             sToast.normal.background = panel; sToast.normal.textColor = Color.white;
             sPanel = new GUIStyle(sToast) { alignment = TextAnchor.UpperLeft, padding = new RectOffset(20, 20, 14, 14), fontSize = 16 };
+            sTip = new GUIStyle(sToast) { alignment = TextAnchor.UpperLeft, padding = new RectOffset(12, 12, 8, 8), fontSize = 13, wordWrap = true };
+            sTip.normal.background = Rounded(new Color(0.1f, 0.07f, 0.04f, 0.97f), new Color(1f, 0.655f, 0.153f, 0.6f), 8, out var tipBorder); sTip.border = tipBorder;
             GUI.skin.textField.font = font; GUI.skin.textField.fontSize = 14;
             GUI.skin.textField.normal.background = GUI.skin.textField.hover.background = GUI.skin.textField.focused.background = field;
             GUI.skin.textField.border = fieldBorder; GUI.skin.textField.padding = new RectOffset(8, 8, 5, 5);
@@ -867,7 +870,7 @@ namespace EggCoop
             sText = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
             sDim = sHead = sText; sBtn = sTabOn = GUI.skin.button; sToggle = GUI.skin.toggle; sWin = null;
             tag = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
-            sToast = sPanel = new GUIStyle(GUI.skin.box) { fontSize = 14, richText = true };
+            sToast = sPanel = sTip = new GUIStyle(GUI.skin.box) { fontSize = 14, richText = true, wordWrap = true };
         }
         void OnGUI()
         {
@@ -1031,6 +1034,7 @@ namespace EggCoop
             }
             if (Event.current.type == EventType.Repaint) menuContentHeight = GUILayoutUtility.GetLastRect().yMax + 8;
             GUILayout.EndScrollView();
+            DrawTooltip(window);
             GUI.DragWindow();
         }
 
