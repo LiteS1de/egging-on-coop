@@ -4,7 +4,7 @@
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>EggCoop</AssemblyName>
-    <Version>0.5.1</Version>
+    <Version>0.6.0</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">$(MSBuildThisFileDirectory)..\..\lab\p1</GameDir>
     <Managed>$(GameDir)\Egging On_Data\Managed</Managed>
@@ -40,6 +40,7 @@
     <Reference Include="$(Managed)\UnityEngine.UnityWebRequestModule.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.TextRenderingModule.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
+    <Reference Include="$(Managed)\UnityEngine.JSONSerializeModule.dll" Private="false" />
     <Reference Include="$(Managed)\netstandard.dll" Private="false" />
   </ItemGroup>
 

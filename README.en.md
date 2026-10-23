@@ -40,6 +40,10 @@
 - **Pings** — mouse wheel click: a ping where the camera looks, with your nick and the distance.
 - **Shame board** — who fell the most, the worst fall, how many cracks. The totals show up on the end credits.
 
+**For streamers**
+- **Streamer mode** — IP addresses and invite codes on screen turn into dots.
+- **Viewer effects** for Twitch channel points and bits: wind, hop, moon gravity, slow motion, slippery egg, upside-down camera, teleports and more. Each has its own price, cooldown and switch; the mod creates the channel rewards itself and refunds points when an effect could not run.
+
 **Connecting**
 - Invite code, Radmin VPN or IP. If the internet blinks, a guest reconnects on its own.
 ## Screenshots

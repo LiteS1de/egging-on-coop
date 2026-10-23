@@ -84,5 +84,15 @@ Check(sq.Next(30, e => true, gone)?.Effect == "wind", "then runs");
 sq.Add(new StreamQueue.Req { Effect = "flip", At = 31 });
 Check(sq.Next(95, e => false, gone) == null && gone.Count == 1 && gone[0].Effect == "flip" && sq.Count == 0, "expired goes back for a refund");
 
+// JSON reader on real Twitch shapes (EventSub welcome and a redemption, a Helix list).
+var welcome = Json.Parse("{\"metadata\":{\"message_id\":\"96a3f3b5\",\"message_type\":\"session_welcome\",\"message_timestamp\":\"2023-07-19T14:56:51.634234626Z\"},\"payload\":{\"session\":{\"id\":\"AQoQILE98gtqShGmLD7AM6yJThAB\",\"status\":\"connected\",\"keepalive_timeout_seconds\":10,\"reconnect_url\":null}}}");
+Check(Json.Str(welcome, "metadata", "message_type") == "session_welcome" && Json.Str(welcome, "payload", "session", "id") == "AQoQILE98gtqShGmLD7AM6yJThAB" && Json.Int(welcome, "payload", "session", "keepalive_timeout_seconds") == 10, "welcome");
+var red = Json.Parse("{ \"payload\": { \"event\": { \"id\": \"17fa2df1\", \"user_name\": \"Cool_User\", \"user_input\": \"pogchamp \\\"quoted\\\" \\u0416\", \"reward\": { \"id\": \"92af127c\", \"cost\": 100 }, \"bits\": 1000, \"is_anonymous\": false } } }");
+Check(Json.Str(red, "payload", "event", "reward", "id") == "92af127c" && Json.Int(red, "payload", "event", "bits") == 1000 && !Json.Bool(red, "payload", "event", "is_anonymous"), "redemption");
+Check(Json.Str(red, "payload", "event", "user_input") == "pogchamp \"quoted\" Ж", "escapes");
+var list = Json.Parse("{\"data\":[{\"id\":\"a\",\"title\":\"Порыв ветра\"},{\"id\":\"b\"}],\"pagination\":{}}");
+Check(Json.List(list, "data").Count == 2 && Json.Str(list, "data", 0, "title") == "Порыв ветра" && Json.Str(list, "data", 1, "id") == "b", "helix list");
+Check(Json.Parse("{broken") == null && Json.Str(null, "x") == null, "broken input");
+
 Console.WriteLine("code example: " + code);
 Console.WriteLine("ALL OK");

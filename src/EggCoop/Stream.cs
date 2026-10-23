@@ -256,10 +256,12 @@ namespace EggCoop
                     var c = effCfg[d.Id];
                     GUILayout.BeginHorizontal();
                     float left = streamQ.CooldownLeft(d.Id, Time.unscaledTime);
+                    var was = (c.On.Value, c.Points.Value, c.Cooldown.Value);
                     c.On.Value = EggToggleW(c.On.Value, d.Name + (Active(d.Id) ? " ●" : left > 0 ? $" ({left:0})" : ""), 230, d.Desc);
                     c.Points.Value = IntField(c.Points.Value, 58);
                     c.Bits.Value = IntField(c.Bits.Value, 48);
                     c.Cooldown.Value = IntField(c.Cooldown.Value, 42);
+                    if (was != (c.On.Value, c.Points.Value, c.Cooldown.Value)) MarkRewardsDirty();   // the channel point reward follows
                     if (GUILayout.Button("Тест", sBtn, GUILayout.Width(64)) && !RequestEffect(d.Id, cfg.Nick.Value, "test")) Toast("Эффект выключен");
                     GUILayout.EndHorizontal();
                 }

@@ -9,5 +9,6 @@
     <Compile Include="..\EggCoop\InviteCode.cs" />
     <Compile Include="..\EggCoop\SocialMath.cs" />
     <Compile Include="..\EggCoop\StreamCore.cs" />
+    <Compile Include="..\EggCoop\Json.cs" />
   </ItemGroup>
 </Project>

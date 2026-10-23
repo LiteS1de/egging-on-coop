@@ -19,7 +19,7 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public partial class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.5.1";
+        public const string Version = "0.6.0";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -60,6 +60,7 @@ namespace EggCoop
             cfg.ShameStats =Config.Bind("Stats", "Shame", "", "Доска позора (ник:разбился,падений,худшее,потеряно м;...)");
             shame = Shame.Parse(cfg.ShameStats.Value);
             InitStream();
+            InitTwitch();
             cfg.Port = Config.Bind("Network", "Port", 7788, "UDP-порт хоста");
             cfg.SignalUrl = Config.Bind("Network", "SignalUrl", "https://ntfy.sh", "ntfy-сервер для пробивки NAT");
             cfg.StunServers = Config.Bind("Network", "StunServers", "stun.l.google.com:19302,stun.cloudflare.com:3478", "STUN-серверы через запятую");
@@ -118,7 +119,8 @@ namespace EggCoop
                 else if (a[i] == "-coop-gomover") goMover = true;
                 else if (a[i] == "-coop-flagtest") flagTest = true;     // replay every world event as if a friend did it, then tour them
                 else if (a[i] == "-coop-socialdemo") socialDemo = true;
-                else if (a[i] == "-coop-streamtest") streamTest = true;   // queue every viewer effect in turn and log what it changed
+                else if (a[i] == "-coop-streamtest") streamTest = true;
+                else if (a[i] == "-coop-twitchtest") twitchTest = true;   // Twitch socket, device code and fake events, no login   // queue every viewer effect in turn and log what it changed
                 else if (a[i] == "-coop-streamer") { cfg.StreamerMode.Value = true; showLog = true; joinText = "26.12.34.56:7788"; }   // streamer-mode screenshots: menu + network log // wheel, bubble, ping and board on screen for screenshots
                 else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
@@ -197,11 +199,12 @@ namespace EggCoop
             if (inGame && flagTest && world != null && world.Count > 0 && Time.unscaledTime > 45f) FlagTestStep();
             if (inGame && socialDemo && Time.unscaledTime > 30f) SocialDemoStep();
             if (inGame && streamTest && Time.unscaledTime > 30f) StreamTestStep();
+            if (inGame && twitchTest && Time.unscaledTime > 30f) { twitchTest = false; StartCoroutine(TwitchLabTest()); }
 #endif
         }
 
 #if LAB
-        bool flagTest, socialDemo, streamTest;
+        bool flagTest, socialDemo, streamTest, twitchTest;
         int streamStep;
         void StreamTestStep()
         {
@@ -576,6 +579,7 @@ namespace EggCoop
             }
             SocialTick(inGame);
             StreamTick(inGame);
+            TwitchTick();
             if (pickerUntil > 0 && (Time.unscaledTime > pickerUntil || ghosts.Count < 2)) pickerUntil = 0;
             if (net.Active && net.IsHost && hostAddrs == null) hostAddrs = LocalAddresses(cfg.Port.Value);
             if (!net.Active) hostAddrs = null;
