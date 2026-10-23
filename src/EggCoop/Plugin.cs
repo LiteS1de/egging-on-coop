@@ -19,7 +19,7 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.4.0";
+        public const string Version = "0.4.1";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -103,6 +103,8 @@ namespace EggCoop
                 else if (a[i] == "-coop-tptest") tpTest = true;
                 else if (a[i] == "-coop-menu") openMenu = true;
                 else if (a[i] == "-coop-worlddump") worldDump = true;
+                else if (a[i] == "-coop-uidump") uiDump = true;
+                else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
                 else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s
                 else if (a[i] == "-coop-worldlog") worldLog = true;   // log the pushed object + a platform every 2 s   // F9 open on arrival, for screenshots
                 else if (a[i] == "-coop-crackfirst") crackFirst = true;   // join right after our shell rebuilds: the ghost is built then
@@ -171,6 +173,8 @@ namespace EggCoop
             if (inGame && openMenu && net.Active) { openMenu = false; SetMenu(true); }
             if (inGame && worldDump && Time.unscaledTime > 40f) { worldDump = false; DumpWorld(); }
             if (inGame) WorldLabStep();
+            if (inGame && uiDump && Time.unscaledTime > 30f) { uiDump = false; DumpUi(); }
+            if (uiDemo && toasts.Count == 0) Toast("Телепорт к Host — так выглядит оповещение");
             if (inGame && standTest && !net.IsHost) StandTestStep();
             if (inGame && tpTest && !net.IsHost && ghosts.Count > 0) { var g = ghosts.Values.First(); Log.LogInfo($"Lab tp: {TryTeleport(g)}"); nextLabStep += 9f; }
 #endif
@@ -179,7 +183,7 @@ namespace EggCoop
 #if LAB
         // "-coop-standtest" (guest): drop onto the host's ghost from 1.5 m, then from 40 m, and log where we ended up
         // and whether the shell cracked. Read with: Select-String LogOutput.log "Lab stand"
-        bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump, pushTest, worldLog;
+        bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump, pushTest, worldLog, uiDump, uiDemo;
         static int labBody, pushCount;
         float nextPush, nextWorldLog;
         void WorldLabStep()
@@ -204,6 +208,36 @@ namespace EggCoop
                 var mp = mover != null ? mover.transform.position : Vector3.zero;
                 Log.LogInfo(System.FormattableString.Invariant($"Lab world t={System.DateTimeOffset.Now.ToUnixTimeMilliseconds()} clock={SharedClock.Time:F2} off={SharedClock.Offset:F2} mover=({mp.x:F2},{mp.y:F2},{mp.z:F2}) body={(labBody != 0 ? labBody : world.LastRemoteBody)} {world.Describe(labBody != 0 ? labBody : world.LastRemoteBody)}"));
             }
+        }
+
+        // UI recon: the game's fonts, the sprites its menus draw with (saved as PNG) and its text colours.
+        void DumpUi()
+        {
+            var dir = System.IO.Path.Combine(Paths.BepInExRootPath, "ui-dump");
+            System.IO.Directory.CreateDirectory(dir);
+            foreach (var f in Resources.FindObjectsOfTypeAll<Font>()) Log.LogInfo($"UI font: {f.name} dynamic={f.dynamic} names={string.Join(",", f.fontNames ?? new string[0])}");
+            foreach (var f in Resources.FindObjectsOfTypeAll<TMPro.TMP_FontAsset>()) Log.LogInfo($"UI tmp: {f.name} source={(f.sourceFontFile != null ? f.sourceFontFile.name : "null")} atlas={f.atlasTexture?.width}");
+            var seen = new HashSet<Sprite>();
+            foreach (var img in Resources.FindObjectsOfTypeAll<UnityEngine.UI.Image>())
+            {
+                var sp = img.sprite;
+                if (sp == null || !seen.Add(sp) || seen.Count > 80) continue;
+                Log.LogInfo($"UI sprite: {sp.name} {sp.rect.width}x{sp.rect.height} border={sp.border} on {img.name} color={img.color} type={img.type}");
+                try
+                {
+                    var rt = RenderTexture.GetTemporary(sp.texture.width, sp.texture.height, 0, RenderTextureFormat.ARGB32);
+                    Graphics.Blit(sp.texture, rt);
+                    var prev = RenderTexture.active; RenderTexture.active = rt;
+                    var r = sp.textureRect;
+                    var tex = new Texture2D((int)r.width, (int)r.height, TextureFormat.RGBA32, false);
+                    tex.ReadPixels(new Rect(r.x, r.y, r.width, r.height), 0, 0); tex.Apply();
+                    RenderTexture.active = prev; RenderTexture.ReleaseTemporary(rt);
+                    System.IO.File.WriteAllBytes(System.IO.Path.Combine(dir, sp.name.Replace('/', '_') + ".png"), tex.EncodeToPNG());
+                }
+                catch (System.Exception e) { Log.LogInfo($"UI sprite {sp.name}: {e.Message}"); }
+            }
+            foreach (var t in Resources.FindObjectsOfTypeAll<TMPro.TextMeshProUGUI>().Where(t => t.gameObject.scene.IsValid()).Take(60))
+                Log.LogInfo($"UI text: '{t.text?.Replace("\n", " ")}' font={t.font?.name} size={t.fontSize} color={t.color} style={t.fontStyle} on {t.transform.parent?.name}/{t.name}");
         }
 
         // Stage 4 recon: what moves in this world and how the game identifies it.
@@ -567,31 +601,79 @@ namespace EggCoop
             return t;
         }
 
+        // A tinted, readable copy of one of the game's own UI sprites (its textures are not CPU-readable).
+        static Texture2D GameSprite(string name, Color tint, out RectOffset border)
+        {
+            border = new RectOffset();
+            var sp = Resources.FindObjectsOfTypeAll<Sprite>().FirstOrDefault(x => x.name == name);
+            if (sp == null) return null;
+            var rt = RenderTexture.GetTemporary(sp.texture.width, sp.texture.height, 0, RenderTextureFormat.ARGB32);
+            Graphics.Blit(sp.texture, rt);
+            var prev = RenderTexture.active; RenderTexture.active = rt;
+            var r = sp.textureRect;
+            var tex = new Texture2D((int)r.width, (int)r.height, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave };
+            tex.ReadPixels(new Rect(r.x, r.y, r.width, r.height), 0, 0);
+            RenderTexture.active = prev; RenderTexture.ReleaseTemporary(rt);
+            var px = tex.GetPixels();
+            for (int i = 0; i < px.Length; i++) px[i] *= tint;
+            tex.SetPixels(px); tex.Apply();
+            var bd = sp.border;   // left, bottom, right, top
+            border = new RectOffset((int)bd.x, (int)bd.z, (int)bd.w, (int)bd.y);
+            return tex;
+        }
+
+        // The game's look: its Arvo font, white text, grey secondary text, orange (#FFA727) accents, its rounded
+        // "UIBevel" panels and the little egg it uses as a marker. Falls back to flat colours if an asset is missing.
+        static readonly Color Orange = new Color(1f, 0.655f, 0.153f), Grey = new Color(0.75f, 0.75f, 0.75f);
+        Texture2D eggIcon, eggOff;
+        bool uiDemoPicker;   // lab screenshots only
+
         void InitStyles()
         {
             if (sWin != null) return;
-            var accent = new Color(1f, 0.8f, 0.3f);
-            sWin = new GUIStyle(GUI.skin.window) { padding = new RectOffset(14, 14, 34, 12), fontSize = 16, fontStyle = FontStyle.Bold };
-            sWin.normal.background = sWin.onNormal.background = Tex(new Color(0.07f, 0.08f, 0.1f, 0.95f));
-            sWin.normal.textColor = sWin.onNormal.textColor = accent;
-            sHead = new GUIStyle(GUI.skin.label) { fontSize = 13, fontStyle = FontStyle.Bold, margin = new RectOffset(0, 0, 12, 4) };
-            sHead.normal.textColor = accent;
-            sText = new GUIStyle(GUI.skin.label) { fontSize = 13, wordWrap = true };
-            sText.normal.textColor = new Color(0.92f, 0.92f, 0.92f);
-            sDim = new GUIStyle(sText) { fontSize = 11 };
-            sDim.normal.textColor = new Color(0.62f, 0.64f, 0.68f);
-            sBtn = new GUIStyle(GUI.skin.button) { fontSize = 13, fixedHeight = 26 };
-            sToggle = new GUIStyle(GUI.skin.toggle) { fontSize = 13 };
-            sToggle.normal.textColor = sToggle.onNormal.textColor = sToggle.hover.textColor = sToggle.onHover.textColor = sText.normal.textColor;
-            tag = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, fontSize = 15 };
-            sToast = new GUIStyle(GUI.skin.box) { fontSize = 14, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(14, 14, 6, 6) };
-            sToast.normal.background = Tex(new Color(0f, 0f, 0f, 0.72f));
-            sToast.normal.textColor = Color.white;
-            sPanel = new GUIStyle(GUI.skin.box) { padding = new RectOffset(14, 14, 10, 10), alignment = TextAnchor.UpperLeft, fontSize = 14 };
-            sPanel.normal.background = Tex(new Color(0.07f, 0.08f, 0.1f, 0.9f));
-            sPanel.normal.textColor = Color.white;
+            var font = Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f => f.name == "Arvo-Regular");
+            if (font == null && Time.unscaledTime < 20f) { BasicStyles(); return; }   // game UI not loaded yet: try again next frame
+            var panel = GameSprite("UIBevel", new Color(0f, 0f, 0f, 0.8f), out var panelBorder) ?? Tex(new Color(0f, 0f, 0f, 0.8f));
+            var hover = GameSprite("UIBevel", new Color(1f, 0.655f, 0.153f, 0.22f), out var hoverBorder) ?? Tex(new Color(1f, 0.655f, 0.153f, 0.22f));
+            var field = GameSprite("UIBevel", new Color(1f, 1f, 1f, 0.08f), out var fieldBorder) ?? Tex(new Color(1f, 1f, 1f, 0.08f));
+            eggIcon = GameSprite("smallEgg", Orange, out _);
+            eggOff = GameSprite("smallEgg", new Color(1f, 1f, 1f, 0.3f), out _);
+            // The bevel's corners are 45 px of a 256 px sprite: draw them at half size so small widgets stay round, not blobby.
+            RectOffset Half(RectOffset o) => new RectOffset(o.left / 2, o.right / 2, o.top / 2, o.bottom / 2);
+
+            GUIStyle Label(int size, Color c) { var st = new GUIStyle(GUI.skin.label) { font = font, fontSize = size, wordWrap = true, richText = true }; st.normal.textColor = c; return st; }
+            sWin = new GUIStyle(GUI.skin.window) { font = font, padding = new RectOffset(18, 18, 40, 14), fontSize = 20, alignment = TextAnchor.UpperCenter, border = panelBorder };
+            sWin.normal.background = sWin.onNormal.background = sWin.focused.background = sWin.onFocused.background = panel;
+            sWin.normal.textColor = sWin.onNormal.textColor = sWin.focused.textColor = sWin.onFocused.textColor = Orange;
+            sHead = Label(15, Orange); sHead.margin = new RectOffset(0, 0, 14, 4);
+            sText = Label(14, Color.white);
+            sDim = Label(12, Grey);
+            sBtn = new GUIStyle(GUI.skin.button) { font = font, fontSize = 14, fixedHeight = 28, border = Half(hoverBorder), padding = new RectOffset(10, 10, 4, 4) };
+            sBtn.normal.background = field; sBtn.hover.background = sBtn.active.background = hover;
+            sBtn.normal.textColor = Color.white; sBtn.hover.textColor = sBtn.active.textColor = Orange;
+            // Checkboxes are text buttons with the game's egg drawn in front: orange egg = on, faint egg = off.
+            sToggle = Label(14, Color.white); sToggle.padding = new RectOffset(30, 4, 4, 4); sToggle.wordWrap = false;
+            sToggle.hover.textColor = sToggle.active.textColor = Orange;
+            tag = new GUIStyle(GUI.skin.label) { font = font, alignment = TextAnchor.MiddleCenter, fontSize = 17 };
+            sToast = new GUIStyle(GUI.skin.box) { font = font, fontSize = 16, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(40, 18, 9, 9), border = Half(panelBorder), richText = true };
+            sToast.normal.background = panel; sToast.normal.textColor = Color.white;
+            sPanel = new GUIStyle(sToast) { alignment = TextAnchor.UpperLeft, padding = new RectOffset(20, 20, 14, 14), fontSize = 16 };
+            GUI.skin.textField.font = font; GUI.skin.textField.fontSize = 14;
+            GUI.skin.textField.normal.background = GUI.skin.textField.hover.background = GUI.skin.textField.focused.background = field;
+            GUI.skin.textField.border = Half(fieldBorder); GUI.skin.textField.padding = new RectOffset(8, 8, 5, 5);
+            GUI.skin.textField.normal.textColor = GUI.skin.textField.focused.textColor = GUI.skin.textField.hover.textColor = Color.white;
+            Log.LogInfo($"UI styled: font={(font != null ? font.name : "default")} panel={(panel.width > 1)} egg={(eggIcon != null)}");
         }
 
+        // Plain styles for the first seconds, before the game has loaded its UI assets.
+        void BasicStyles()
+        {
+            if (sText != null) return;
+            sText = new GUIStyle(GUI.skin.label) { fontSize = 14, richText = true };
+            sDim = sHead = sText; sBtn = GUI.skin.button; sToggle = GUI.skin.toggle; sWin = null;
+            tag = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
+            sToast = sPanel = new GUIStyle(GUI.skin.box) { fontSize = 14, richText = true };
+        }
         void OnGUI()
         {
             InitStyles();
@@ -605,12 +687,12 @@ namespace EggCoop
             }
             DrawNameTags();
             DrawToasts();
-            if (pickerUntil > 0) DrawPicker();
+            if (pickerUntil > 0 || (uiDemoPicker && ghosts.Count > 0)) DrawPicker();
             if (summaryUntil > Time.unscaledTime) DrawSummary(new Rect(40, 40, 360, 0));
             if (menuOpen)
             {
-                window.width = Mathf.Min(500, Screen.width - 20); window.height = 0;   // let the layout pick the height every frame
-                window = GUILayout.Window(0x6E99, window, DrawMenu, $"Egging On Co-op {Version}", sWin);
+                window.width = Mathf.Min(540, Screen.width - 20); window.height = 0;   // let the layout pick the height every frame
+                window = GUILayout.Window(0x6E99, window, DrawMenu, $"EGGING ON CO-OP  {Version}", sWin ?? GUI.skin.window);
                 // Keep it on screen: small windowed games are shorter than the menu (it scrolls inside).
                 window.x = Mathf.Clamp(window.x, 0, Mathf.Max(0, Screen.width - window.width));
                 window.y = Mathf.Clamp(window.y, 0, Mathf.Max(0, Screen.height - window.height));
@@ -625,7 +707,9 @@ namespace EggCoop
             {
                 var size = sToast.CalcSize(new GUIContent(t.text));
                 GUI.color = new Color(1, 1, 1, Mathf.Clamp01((t.until - Time.unscaledTime) * 2f));
-                GUI.Box(new Rect((Screen.width - size.x) / 2, y, size.x, size.y), t.text, sToast);
+                var box = new Rect((Screen.width - size.x) / 2, y, size.x, size.y);
+                GUI.Box(box, t.text, sToast);
+                if (eggIcon != null) GUI.DrawTexture(new Rect(box.x + 14, box.y + (box.height - 18) / 2, 18, 18), eggIcon, ScaleMode.ScaleToFit);
                 y += size.y + 6;
             }
             GUI.color = Color.white;
@@ -634,8 +718,8 @@ namespace EggCoop
         void DrawPicker()
         {
             var list = Others();
-            var lines = new List<string> { $"Телепорт к кому? Нажмите цифру  (Esc — отмена)" };
-            for (int i = 0; i < list.Count && i < 9; i++) lines.Add($"{i + 1}   {Describe(list[i])}");
+            var lines = new List<string> { "<color=#FFA727>ТЕЛЕПОРТ К КОМУ?</color>   <size=13><color=#BFBFBF>цифра — выбрать, Esc — отмена</color></size>" };
+            for (int i = 0; i < list.Count && i < 9; i++) lines.Add($"<color=#FFA727>{i + 1}</color>    {Describe(list[i])}");
             string text = string.Join("\n", lines);
             var size = sPanel.CalcSize(new GUIContent(text));
             GUI.Box(new Rect((Screen.width - size.x) / 2, Screen.height * 0.62f, size.x, size.y), text, sPanel);
@@ -657,7 +741,7 @@ namespace EggCoop
 
         void DrawSummary(Rect at)
         {
-            var lines = new List<string> { "Итоги кооператива — телепорты", $"Вы ({cfg.Nick.Value}): {tpCounts.Values.Sum()}" };
+            var lines = new List<string> { "<color=#FFA727>ИТОГИ КООПЕРАТИВА · ТЕЛЕПОРТЫ</color>", $"Вы ({cfg.Nick.Value}): {tpCounts.Values.Sum()}" };
             foreach (var kv in tpCounts.OrderByDescending(kv => kv.Value)) lines.Add($"    к {kv.Key}: {kv.Value}");
             foreach (var g in Others()) lines.Add($"{g.Nick}: {g.TpTotal}");
             string text = string.Join("\n", lines);
@@ -682,10 +766,10 @@ namespace EggCoop
 
         void DrawHostToggles()
         {
-            bool c = GUILayout.Toggle(cfg.Collide.Value, " Столкновения (иначе проходим сквозь друг друга)", sToggle);
+            bool c = EggToggle(cfg.Collide.Value, "Столкновения (иначе проходим сквозь друг друга)");
             bool k = cfg.CrackOnHit.Value;
             GUI.enabled = c;
-            k = GUILayout.Toggle(k, " Удар о друга разбивает скорлупу", sToggle);
+            k = EggToggle(k, "Удар о друга разбивает скорлупу");
             GUI.enabled = true;
             if (c != cfg.Collide.Value || k != cfg.CrackOnHit.Value)
             {
@@ -694,12 +778,22 @@ namespace EggCoop
             }
         }
 
+        bool EggToggle(bool value, string text)
+        {
+            bool clicked = GUILayout.Button(text, sToggle);
+            var r = GUILayoutUtility.GetLastRect();
+            var icon = value ? eggIcon : eggOff;
+            if (icon != null) GUI.DrawTexture(new Rect(r.x + 4, r.y + (r.height - 18) / 2, 18, 18), icon, ScaleMode.ScaleToFit);
+            else GUI.Label(new Rect(r.x + 4, r.y, 24, r.height), value ? "[x]" : "[ ]", sText);
+            return clicked ? !value : value;
+        }
+
         void KeyRow(string label, string id, ConfigEntry<KeyCode> key)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label(label, sText, GUILayout.Width(150));
             GUILayout.Label(waitKey == id ? "нажмите клавишу… (Esc — отмена)" : key.Value.ToString(), sText);
-            if (waitKey != id && GUILayout.Button("Изменить", sBtn, GUILayout.Width(100))) waitKey = id;
+            if (waitKey != id && GUILayout.Button("Изменить", sBtn, GUILayout.Width(125))) waitKey = id;
             GUILayout.EndHorizontal();
         }
 
@@ -713,14 +807,14 @@ namespace EggCoop
 
             if (!net.Active)
             {
-                GUILayout.Label("Создать игру", sHead);
+                GUILayout.Label(("Создать игру").ToUpperInvariant(), sHead);
                 DrawHostToggles();
                 if (GUILayout.Button("Создать игру (порт " + cfg.Port.Value + ")", sBtn)) { ApplyOwnSettings(); net.Host(); }
-                GUILayout.Label("Подключиться", sHead);
+                GUILayout.Label(("Подключиться").ToUpperInvariant(), sHead);
                 GUILayout.Label("Код приглашения или IP:порт (например, Radmin-адрес хоста)", sDim);
                 GUILayout.BeginHorizontal();
                 joinText = GUILayout.TextField(joinText, 64);
-                if (GUILayout.Button("Подключиться", sBtn, GUILayout.Width(130)) && joinText.Trim().Length > 0)
+                if (GUILayout.Button("Подключиться", sBtn, GUILayout.Width(150)) && joinText.Trim().Length > 0)
                 {
                     cfg.LastJoin.Value = joinText.Trim();
                     net.Join(joinText);
@@ -733,31 +827,32 @@ namespace EggCoop
                 GUILayout.Label(net.IsHost ? $"Вы хост · игроков {net.PlayerCount}/{CoopNet.MaxPlayers}" : $"Вы гость · игроков {net.PlayerCount}{ping}", sText);
                 if (net.IsHost)
                 {
-                    GUILayout.Label("Как друзьям зайти", sHead);
+                    GUILayout.Label(("Как друзьям зайти").ToUpperInvariant(), sHead);
                     if (net.Code != null) AddressRow(net.Code, "код приглашения (содержит ваш внешний IP)");
                     if (net.VpnSuspected) GUILayout.Label("У вас, похоже, включён VPN: по коду друзья могут не зайти. Выключите VPN или дайте адрес ниже.", sDim);
                     if (hostAddrs != null) foreach (var a in hostAddrs) { var p = a.Split('|'); AddressRow(p[0], p[1]); }
-                    GUILayout.Label("Настройки хоста", sHead);
+                    GUILayout.Label(("Настройки хоста").ToUpperInvariant(), sHead);
                     DrawHostToggles();
                 }
                 else GUILayout.Label((Ghost.Collide ? "Столкновения: вкл" : "Режим призраков: сквозь друг друга") + (Ghost.Collide && Ghost.CrackOnHit ? ", удар разбивает скорлупу" : "") + "  (решает хост)", sDim);
 
-                GUILayout.Label($"Игроки · ваших телепортов: {tpCounts.Values.Sum()}", sHead);
+                GUILayout.Label(($"Игроки · ваших телепортов: {tpCounts.Values.Sum()}").ToUpperInvariant(), sHead);
                 foreach (var kv in ghosts.OrderBy(kv => kv.Key))
                 {
                     var g = kv.Value;
                     GUILayout.BeginHorizontal();
-                    GUILayout.Label(Describe(g), sText, GUILayout.Width(200));
-                    GUILayout.Label(net.Ping.TryGetValue(kv.Key, out var pg) ? $"{pg} мс" : "", sDim, GUILayout.Width(50));
-                    GUILayout.Label($"ТП к нему {(tpCounts.TryGetValue(g.Nick, out var n) ? n : 0)} · его ТП {g.TpTotal}", sDim, GUILayout.Width(120));
-                    if (GUILayout.Button("Телепорт", sBtn)) TryTeleport(g);
+                    GUILayout.BeginVertical();
+                    GUILayout.Label(Describe(g), sText);
+                    GUILayout.Label((net.Ping.TryGetValue(kv.Key, out var pg) ? $"{pg} мс · " : "") + $"ТП к нему {(tpCounts.TryGetValue(g.Nick, out var n) ? n : 0)} · его ТП {g.TpTotal}", sDim);
+                    GUILayout.EndVertical();
+                    if (GUILayout.Button("Телепорт", sBtn, GUILayout.Width(125))) TryTeleport(g);
                     GUILayout.EndHorizontal();
                 }
                 if (ghosts.Count == 0) GUILayout.Label("Пока никого нет", sDim);
                 if (world != null) GUILayout.Label($"Общий мир: {world.Count} предметов · ведёте {world.Owned} · у друзей {world.Following}", sDim);
             }
 
-            GUILayout.Label("Клавиши", sHead);
+            GUILayout.Label(("Клавиши").ToUpperInvariant(), sHead);
             KeyRow("Меню кооператива", "menu", cfg.MenuKey);
             KeyRow("Телепорт к другу", "tp", cfg.TpKey);
             GUILayout.Label("При двух и более друзьях клавиша телепорта открывает выбор: нажмите цифру нужного игрока.", sDim);
@@ -777,9 +872,9 @@ namespace EggCoop
         void AddressRow(string address, string note)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(address, sText, GUILayout.Width(170));
+            GUILayout.Label(address, sText, GUILayout.Width(175));
             GUILayout.Label(note, sDim);
-            if (GUILayout.Button("Копировать", sBtn, GUILayout.Width(100))) { GUIUtility.systemCopyBuffer = address; Toast("Скопировано: " + address); }
+            if (GUILayout.Button("Копировать", sBtn, GUILayout.Width(125))) { GUIUtility.systemCopyBuffer = address; Toast("Скопировано: " + address); }
             GUILayout.EndHorizontal();
         }
 

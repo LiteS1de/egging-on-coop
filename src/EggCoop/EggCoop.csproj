@@ -4,7 +4,7 @@
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>EggCoop</AssemblyName>
-    <Version>0.4.0</Version>
+    <Version>0.4.1</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">$(MSBuildThisFileDirectory)..\..\lab\p1</GameDir>
     <Managed>$(GameDir)\Egging On_Data\Managed</Managed>
@@ -23,6 +23,10 @@
     <Reference Include="$(Managed)\Assembly-CSharp.dll" Private="false" />
     <Reference Include="$(Managed)\Rewired_Core.dll" Private="false" />
     <Reference Include="$(Managed)\RayFireAssembly.dll" Private="false" />
+    <Reference Include="$(Managed)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(Managed)\Unity.TextMeshPro.dll" Private="false" />
+    <Reference Include="$(Managed)\UnityEngine.ImageConversionModule.dll" Private="false" />
+    <Reference Include="$(Managed)\UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="$(Managed)\UnityEngine.IMGUIModule.dll" Private="false" />
