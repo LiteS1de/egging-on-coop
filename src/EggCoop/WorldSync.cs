@@ -67,7 +67,8 @@ namespace EggCoop
         readonly Dictionary<Rigidbody, Body> byRb = new Dictionary<Rigidbody, Body>();
         readonly Dictionary<int, Group> groups = new Dictionary<int, Group>();
         readonly HashSet<int> knownBroken = new HashSet<int>();
-        bool registered, snapshotAsked;
+        bool registered, snapshotAsked, wasConnected;
+        World registeredFor;   // the game rebuilds World on "Save & Quit", quick restart and reloads: register again then
         float nextSend;
         static readonly FieldInfoCache StoreState = new FieldInfoCache();
 
@@ -88,8 +89,10 @@ namespace EggCoop
 
         public void Register()
         {
-            if (registered) return;
+            if (registered && registeredFor == World.instance) return;
+            if (registered) Unregister();
             registered = true;
+            registeredFor = World.instance;
             var egg = World.instance.GetEggCore().eggRigidbody;
             var determiner = World.instance.GetEgg().determiner;
             int dup = 0;
@@ -115,6 +118,21 @@ namespace EggCoop
             foreach (var g in bodies.Values.Select(b => b.G).Distinct()) groups[g.Id] = g;
             foreach (var id in Persistent.instance.saveData.brokenObjects) knownBroken.Add(id);
             Plugin.Log.LogInfo($"World sync: {bodies.Count} bodies in {groups.Count} groups ({dup} duplicate paths skipped)");
+        }
+
+        void Unregister()
+        {
+            bodies.Clear(); byRb.Clear(); groups.Clear(); knownBroken.Clear();
+            registered = false; snapshotAsked = false;
+            Plugin.Log.LogInfo("World sync: world was rebuilt, registering again");
+        }
+
+        // A player left: whatever they held is released (the host sends its own view of the poses to everyone).
+        public void PlayerLeft(int id)
+        {
+            if (!registered) return;
+            foreach (var g in groups.Values.Where(g => g.Owner == id).ToList())
+                if (net.IsHost) Release(g); else SetOwner(g, -1);
         }
 
         void Join(Body b, Group g) { b.G = g; g.Bodies.Add(b); }
@@ -146,7 +164,15 @@ namespace EggCoop
 
         public void Update()
         {
-            if (!registered || !net.Connected) return;
+            bool conn = net.Connected;
+            if (conn != wasConnected && registered)
+            {
+                // Lost the link: let go of what friends were moving. Back again: ask the host for its world once more.
+                if (!conn) foreach (var g in groups.Values) if (g.Owner != net.MyId) SetOwner(g, -1);
+                snapshotAsked = false;
+            }
+            wasConnected = conn;
+            if (!registered || !conn || registeredFor != World.instance) return;
             if (!net.IsHost && !snapshotAsked) { snapshotAsked = true; var w = net.WorldWriter(); w.Put(WSnapReq); net.SendWorld(w, DeliveryMethod.ReliableOrdered); }
             float now = Time.unscaledTime;
             WatchBroken();
@@ -261,7 +287,13 @@ namespace EggCoop
 
         void Receive(int from, NetPacketReader r)
         {
-            if (!registered) return;   // not in the world yet: a snapshot is requested once we are
+            if (!registered || registeredFor != World.instance) return;   // not in the world yet: a snapshot is requested once we are
+            try { ReceiveUnsafe(from, r); }
+            catch (System.Exception e) { Plugin.Warn("world message", e); }
+        }
+
+        void ReceiveUnsafe(int from, NetPacketReader r)
+        {
             byte type = r.GetByte();
             float now = Time.unscaledTime;
             switch (type)
@@ -296,16 +328,21 @@ namespace EggCoop
                     if (net.IsHost) SendSnapshot(from);
                     break;
                 case WSnap:
-                    for (int n = r.GetUShort(); n > 0; n--)
+                {
+                    int total = r.GetUShort(), missing = 0;
+                    for (int n = total; n > 0; n--)
                     {
                         ReadPose(r, out var id, out var p, out var q); int owner = r.GetSByte();
-                        if (!bodies.TryGetValue(id, out var b)) continue;
+                        if (!bodies.TryGetValue(id, out var b)) { missing++; continue; }
                         Place(id, p, q);
                         if (owner >= 0 && owner != net.MyId) SetOwner(b.G, owner);
                     }
                     for (int n = r.GetUShort(); n > 0; n--) Break(r.GetInt());
-                    Plugin.Log.LogInfo($"World sync: host world applied");
+                    Plugin.Log.LogInfo($"World sync: host world applied, {missing} of {total} host objects not found here");
+                    // Objects are matched by their place in the scene: many misses mean a different build of the game.
+                    if (missing > total / 10) Plugin.Notify($"{missing} из {total} предметов хоста не нашлись у вас: похоже, у вас разные версии игры");
                     break;
+                }
                 case WBroken:
                     Break(r.GetInt());
                     break;

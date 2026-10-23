@@ -49,7 +49,12 @@ namespace EggCoop
         public int MyId => IsHost ? 0 : myId;               // host is 0, guests peer.Id + 1 (told by the host)
         public bool Connected => manager != null && (IsHost || (hostPeer != null && myId > 0));
         int myId;
-        float nextClock;   // the session ended on its own (host gone, join failed)
+        float nextClock;
+        // Guest: the host vanished without saying goodbye (Wi-Fi hiccup): keep trying the same address for a while.
+        const float ReconnectWindow = 30f;
+        IPEndPoint lastHost;
+        float reconnectUntil, nextReconnect;
+        public bool Reconnecting => reconnectUntil > 0;   // the session ended on its own (host gone, join failed)
         string endReason;   // (collide, crackOnHit) chosen by the host
         public readonly List<string> Log = new List<string>();
         public readonly Dictionary<int, int> Ping = new Dictionary<int, int>();   // player id -> ms (host: every guest; guest: only the host, id 0)
@@ -241,6 +246,15 @@ namespace EggCoop
             manager.PollEvents();
             if (endReason != null) { var why = endReason; endReason = null; Stop(); OnEnded?.Invoke(why); return; }
             float now = Time.unscaledTime;
+            if (reconnectUntil > 0 && hostPeer == null)
+            {
+                if (now > reconnectUntil) { reconnectUntil = 0; Stop(); OnEnded?.Invoke("Не удалось вернуться к хосту за 30 с — сессия завершена"); return; }
+                if (now >= nextReconnect && manager.GetPeersCount(ConnectionState.Outgoing) == 0)
+                {
+                    nextReconnect = now + 3f;
+                    manager.Connect(lastHost, ConnectKey);
+                }
+            }
             if (IsHost && now >= nextClock && manager.ConnectedPeersCount > 0)
             {
                 nextClock = now + 1f;
@@ -309,6 +323,7 @@ namespace EggCoop
             manager = null;
             hostPeer = null;
             myId = 0;
+            reconnectUntil = 0;
             SharedClock.Offset = 0f;
             Code = null;
             punchTargets.Clear();
@@ -334,14 +349,17 @@ namespace EggCoop
             if (IsHost)
             {
                 Say($"Игрок подключился: {peer}");
-                var w = new NetDataWriter(); w.Put(MsgWelcome); w.Put((byte)(peer.Id + 1));
+                var w = new NetDataWriter(); w.Put(MsgWelcome); w.Put((byte)(peer.Id + 1)); w.Put(Application.version);
                 peer.Send(w, DeliveryMethod.ReliableOrdered);
                 peer.Send(SettingsPacket(), DeliveryMethod.ReliableOrdered);
                 return;
             }
             if (hostPeer != null) { peer.Disconnect(); return; }   // LAN + public route both succeeded: keep the first
             hostPeer = peer;
-            Say($"Подключено к хосту {peer}");
+            lastHost = new IPEndPoint(peer.Address, peer.Port);
+            Say(reconnectUntil > 0 ? $"Снова на связи с хостом {peer}" : $"Подключено к хосту {peer}");
+            if (reconnectUntil > 0) OnEnded?.Invoke("Снова на связи с хостом");   // just a toast: the session goes on
+            reconnectUntil = 0;
         }
 
         public void OnPeerDisconnected(NetPeer peer, DisconnectInfo info)
@@ -354,6 +372,18 @@ namespace EggCoop
                 writer.Reset(); writer.Put(MsgLeave); writer.Put((byte)id);
                 manager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
             }
+            else if (peer == hostPeer && info.Reason != DisconnectReason.RemoteConnectionClose && info.Reason != DisconnectReason.DisconnectPeerCalled)
+            {
+                Say($"Связь с хостом потеряна ({info.Reason}) — переподключаюсь...");
+                OnEnded?.Invoke("Связь с хостом потеряна — переподключаюсь...");
+                hostPeer = null;
+                myId = 0;
+                foreach (var id in remoteIds) OnLeave?.Invoke(id);
+                remoteIds.Clear();
+                reconnectUntil = Time.unscaledTime + ReconnectWindow;
+                nextReconnect = 0;
+            }
+            else if (reconnectUntil > 0 && hostPeer == null) { }   // one failed attempt while reconnecting: Poll tries again
             else if (peer == hostPeer || hostPeer == null)
             {
                 string why = hostPeer == null ? $"Не удалось подключиться ({info.Reason})" : $"Хост вышел или пропал ({info.Reason}) — сессия завершена";
@@ -373,7 +403,13 @@ namespace EggCoop
             int id = r.GetByte();
             if (type == MsgLeave) { remoteIds.Remove(id); OnLeave?.Invoke(id); r.Recycle(); return; }
             if (type == MsgSettings && !IsHost) { byte f = r.GetByte(); r.Recycle(); OnSettings?.Invoke((f & 1) != 0, (f & 2) != 0); return; }
-            if (type == MsgWelcome && !IsHost) { myId = id; r.Recycle(); return; }
+            if (type == MsgWelcome && !IsHost)
+            {
+                myId = id;
+                string hostGame = r.AvailableBytes > 0 ? r.GetString() : null;   // 0.4.0-0.4.2 hosts do not send it
+                if (hostGame != null && hostGame != Application.version) { Say($"Версия игры у хоста {hostGame}, у вас {Application.version}"); OnEnded?.Invoke($"Разные версии игры: у хоста {hostGame}, у вас {Application.version}. Предметы могут не совпадать"); }
+                r.Recycle(); return;
+            }
             if (type == MsgClock && !IsHost) { SharedClock.Sample(r.GetFloat() + peer.Ping / 1000f); r.Recycle(); return; }
             if (type == MsgWorld)
             {
@@ -384,7 +420,7 @@ namespace EggCoop
                     var relay = new NetDataWriter(); relay.Put(MsgWorld); relay.Put((byte)id); relay.Put(r.RawData, r.Position, r.AvailableBytes);
                     foreach (var p in manager.ConnectedPeerList) if (p != peer) p.Send(relay, method);
                 }
-                OnWorld?.Invoke(id, r);
+                try { OnWorld?.Invoke(id, r); } catch (Exception e) { Plugin.Warn("world", e); }
                 r.Recycle();
                 return;
             }
@@ -403,7 +439,7 @@ namespace EggCoop
                 foreach (var p in manager.ConnectedPeerList) if (p != peer) p.Send(writer, DeliveryMethod.Sequenced);
             }
             else remoteIds.Add(id);
-            OnState?.Invoke(id, s);
+            try { OnState?.Invoke(id, s); } catch (Exception e) { Plugin.Warn("state", e); }
         }
 
         public void OnNetworkReceiveUnconnected(IPEndPoint ep, NetPacketReader r, UnconnectedMessageType type)

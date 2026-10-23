@@ -19,7 +19,7 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.4.2";
+        public const string Version = "0.4.3";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -66,6 +66,7 @@ namespace EggCoop
             net = new CoopNet(this, cfg);
             net.OnState += (id, s) => pending[id] = s;
             net.OnLeave += RemoveGhost;
+            net.OnLeave += id => world?.PlayerLeft(id);
             net.OnSettings += ApplyHostSettings;
             net.OnEnded += Toast;
             try { world = new WorldSync(net, harmony); } catch (System.Exception e) { Log.LogError("World sync disabled: " + e); }
@@ -104,6 +105,7 @@ namespace EggCoop
                 else if (a[i] == "-coop-menu") openMenu = true;
                 else if (a[i] == "-coop-worlddump") worldDump = true;
                 else if (a[i] == "-coop-uidump") uiDump = true;
+                else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
                 else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s
                 else if (a[i] == "-coop-worldlog") worldLog = true;   // log the pushed object + a platform every 2 s   // F9 open on arrival, for screenshots
@@ -173,6 +175,7 @@ namespace EggCoop
             if (inGame && openMenu && net.Active) { openMenu = false; SetMenu(true); }
             if (inGame && worldDump && Time.unscaledTime > 40f) { worldDump = false; DumpWorld(); }
             if (inGame) WorldLabStep();
+            if (inGame && rebootAt > 0 && Time.unscaledTime > rebootAt) { rebootAt = 0; Log.LogInfo("Lab: reboot to title"); Boot.instance.Reboot(null); }
             if (inGame && uiDump && Time.unscaledTime > 30f) { uiDump = false; DumpUi(); }
             if (uiDemo && toasts.Count == 0) Toast("Телепорт к Host — так выглядит оповещение");
             if (inGame && standTest && !net.IsHost) StandTestStep();
@@ -185,6 +188,7 @@ namespace EggCoop
         // and whether the shell cracked. Read with: Select-String LogOutput.log "Lab stand"
         bool noShove, standTest, tpTest, crackFirst, openMenu, worldDump, pushTest, worldLog, uiDump, uiDemo;
         static int labBody, pushCount;
+        float rebootAt;
         float nextPush, nextWorldLog;
         void WorldLabStep()
         {
@@ -391,6 +395,11 @@ namespace EggCoop
 
         void Update()
         {
+            try { Tick(); } catch (System.Exception e) { Warn("Update", e); }
+        }
+
+        void Tick()
+        {
             Application.runInBackground = true;   // the host must keep sending while alt-tabbed
             if (waitKey == null && Time.frameCount > ignoreKeysFrame) HandleKeys();
             net.Poll();
@@ -436,7 +445,7 @@ namespace EggCoop
 #endif
         }
 
-        void FixedUpdate() => world?.FixedUpdate();
+        void FixedUpdate() { try { world?.FixedUpdate(); } catch (System.Exception e) { Warn("FixedUpdate", e); } }
 
         void HandleKeys()
         {
@@ -560,6 +569,18 @@ namespace EggCoop
             Cursor.visible = open;
             // Typing a nick must not roll the egg, and moving the mouse over the menu must not turn the camera.
             try { Rewired.ReInput.controllers.Keyboard.enabled = !open; Rewired.ReInput.controllers.Mouse.enabled = !open; } catch { }
+        }
+
+        public static void Notify(string text) => instance?.Toast(text);
+
+        // One failing frame must not stop the mod: log the error (each distinct one at most every 10 s) and go on.
+        static readonly Dictionary<string, float> lastWarn = new Dictionary<string, float>();
+        public static void Warn(string where, System.Exception e)
+        {
+            string key = where + e.GetType().Name + e.Message;
+            if (lastWarn.TryGetValue(key, out var t) && Time.unscaledTime - t < 10f) return;
+            lastWarn[key] = Time.unscaledTime;
+            Log.LogError($"{where}: {e}");
         }
 
         void Toast(string text)
@@ -705,6 +726,11 @@ namespace EggCoop
             sToast = sPanel = new GUIStyle(GUI.skin.box) { fontSize = 14, richText = true };
         }
         void OnGUI()
+        {
+            try { DrawGui(); } catch (System.Exception e) { Warn("OnGUI", e); }
+        }
+
+        void DrawGui()
         {
             InitStyles();
             var e = Event.current;

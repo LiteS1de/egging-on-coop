@@ -136,3 +136,16 @@ Owner's report and what 0.3.0 does about it:
   object claims it through the real collision path; guest clock matches host clock within 0.01 s.
 - NOT VERIFIED: hinged pots in the kitchen, claim races between two players, breakables across PCs, platforms
   actually in phase (the mover near spawn was culled), anything over real internet.
+
+## Stability pass (0.4.3, 2026-10-23)
+- World sync re-registers whenever World is rebuilt (Save & Quit -> Continue, reloads). PASS: host went to title and
+  back mid-session, re-registered 208 bodies and followed the guest's pushes again.
+- A player who leaves releases everything they held (host sends its poses). PASS: guest killed while holding a bucket
+  in mid-air; on the host the bucket stayed frozen until the 10 s timeout, then fell.
+- Guest auto-reconnect: host gone without a goodbye -> retry the same address for 30 s, re-ask the host world.
+  PASS: chaos relay cut the link for 14 s; guest reconnected and got the snapshot again. Host leaving on purpose
+  (RemoteConnectionClose) still ends the session at once.
+- Host sends Application.version in the welcome; guest warns on mismatch; snapshot warns if >10% of host objects
+  are unknown here (different game build). Old hosts send no version: check skipped (compatible with 0.4.x).
+- Update/FixedUpdate/OnGUI and network handlers are guarded: an exception is logged (each distinct one at most every
+  10 s) instead of stopping the mod.
