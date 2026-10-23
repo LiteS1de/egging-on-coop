@@ -41,7 +41,7 @@
 - **Shame board** — who fell the most, the worst fall, how many cracks. The totals show up on the end credits.
 
 **For streamers**
-- **Streamer mode** — IP addresses and invite codes on screen turn into dots.
+- **Streamer mode** — open F9 on stream without worry: IP addresses and invite codes on screen turn into dots, so viewers never see your address or your friends'. "Copy" still copies the real address, so you can invite friends without turning it off. Through Steam no addresses are shown at all.
 - **Viewer effects** for Twitch channel points and bits: wind, hop, moon gravity, slow motion, slippery egg, upside-down camera, teleports and more. Each has its own price, cooldown and switch; the mod creates the channel rewards itself and refunds points when an effect could not run.
 
 **Connecting**
