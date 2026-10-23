@@ -13,7 +13,7 @@ namespace EggCoop
         public ConfigEntry<string> Nick, SignalUrl, StunServers, LastJoin, TpStats, ShameStats;
         public ConfigEntry<int> Port, GhostDelayMs;
         public ConfigEntry<KeyCode> MenuKey, TpKey, EmoteKey, PingKey;
-        public ConfigEntry<bool> Collide, CrackOnHit;
+        public ConfigEntry<bool> Collide, CrackOnHit, StreamerMode;
     }
 
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
@@ -55,6 +55,7 @@ namespace EggCoop
                 if (c > 0 && int.TryParse(part.Substring(c + 1), out var n)) tpCounts[part.Substring(0, c)] = n;
             }
             cfg.EmoteKey = Config.Bind("General", "EmoteKey", KeyCode.G, "Зажать — колесо эмоций и меток");
+            cfg.StreamerMode = Config.Bind("General", "StreamerMode", false, "Режим стримера: не показывать IP-адреса и коды приглашения на экране");
             cfg.PingKey = Config.Bind("General", "PingKey", KeyCode.Mouse2, "Метка туда, куда смотрит камера (Mouse2 — колёсико мыши)");
             cfg.ShameStats =Config.Bind("Stats", "Shame", "", "Доска позора (ник:разбился,падений,худшее,потеряно м;...)");
             shame = Shame.Parse(cfg.ShameStats.Value);
@@ -115,7 +116,8 @@ namespace EggCoop
                 else if (a[i] == "-coop-breaktest") breakTest = true;
                 else if (a[i] == "-coop-gomover") goMover = true;
                 else if (a[i] == "-coop-flagtest") flagTest = true;     // replay every world event as if a friend did it, then tour them
-                else if (a[i] == "-coop-socialdemo") socialDemo = true; // wheel, bubble, ping and board on screen for screenshots
+                else if (a[i] == "-coop-socialdemo") socialDemo = true;
+                else if (a[i] == "-coop-streamer") { cfg.StreamerMode.Value = true; showLog = true; joinText = "26.12.34.56:7788"; }   // streamer-mode screenshots: menu + network log // wheel, bubble, ping and board on screen for screenshots
                 else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
                 else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s
@@ -890,10 +892,10 @@ namespace EggCoop
             float y = 60;
             foreach (var t in toasts)
             {
-                var size = sToast.CalcSize(new GUIContent(t.text));
+                var size = sToast.CalcSize(new GUIContent(Hide(t.text)));
                 GUI.color = new Color(1, 1, 1, Mathf.Clamp01((t.until - Time.unscaledTime) * 2f));
                 var box = new Rect((Screen.width - size.x) / 2, y, size.x, size.y);
-                GUI.Box(box, t.text, sToast);
+                GUI.Box(box, Hide(t.text), sToast);
                 if (eggIcon != null) GUI.DrawTexture(new Rect(box.x + 14, box.y + (box.height - 18) / 2, 18, 18), eggIcon, ScaleMode.ScaleToFit);
                 y += size.y + 6;
             }
@@ -993,6 +995,7 @@ namespace EggCoop
             GUILayout.Label("Ник", sText, GUILayout.Width(40));
             cfg.Nick.Value = GUILayout.TextField(cfg.Nick.Value, 24);
             GUILayout.EndHorizontal();
+            DrawStreamerToggle();
 
             if (!net.Active)
             {
@@ -1002,7 +1005,7 @@ namespace EggCoop
                 GUILayout.Label(("Подключиться").ToUpperInvariant(), sHead);
                 GUILayout.Label("Код приглашения или IP:порт (например, Radmin-адрес хоста)", sDim);
                 GUILayout.BeginHorizontal();
-                joinText = GUILayout.TextField(joinText, 64);
+                joinText = Streamer ? GUILayout.PasswordField(joinText, '•', 64) : GUILayout.TextField(joinText, 64);
                 if (GUILayout.Button("Подключиться", sBtn, GUILayout.Width(150)) && joinText.Trim().Length > 0)
                 {
                     cfg.LastJoin.Value = joinText.Trim();
@@ -1056,7 +1059,7 @@ namespace EggCoop
             if (GUILayout.Button(showLog ? "Скрыть журнал" : "Журнал", sBtn)) showLog = !showLog;
             if (GUILayout.Button("Сбросить счётчики ТП", sBtn)) { tpCounts.Clear(); cfg.TpStats.Value = ""; }
             GUILayout.EndHorizontal();
-            if (showLog) lock (net.Log) foreach (var line in net.Log) GUILayout.Label(line, sDim);
+            if (showLog) lock (net.Log) foreach (var line in net.Log) GUILayout.Label(Hide(line), sDim);
             if (Event.current.type == EventType.Repaint) menuContentHeight = GUILayoutUtility.GetLastRect().yMax + 8;
             GUILayout.EndScrollView();
             GUI.DragWindow();
@@ -1065,9 +1068,9 @@ namespace EggCoop
         void AddressRow(string address, string note)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(address, sText, GUILayout.Width(175));
+            GUILayout.Label(Hide(address), sText, GUILayout.Width(175));
             GUILayout.Label(note, sDim);
-            if (GUILayout.Button("Копировать", sBtn, GUILayout.Width(125))) { GUIUtility.systemCopyBuffer = address; Toast("Скопировано: " + address); }
+            if (GUILayout.Button("Копировать", sBtn, GUILayout.Width(125))) { GUIUtility.systemCopyBuffer = address; Toast(Streamer ? "Скопировано (адрес скрыт режимом стримера)" : "Скопировано: " + address); }
             GUILayout.EndHorizontal();
         }
 

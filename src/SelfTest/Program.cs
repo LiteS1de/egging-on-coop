@@ -65,5 +65,11 @@ var back2 = Shame.Parse(Shame.Format(sh));
 Check(back2.Count == 2 && back2["Host"].Falls == 2 && back2["Host"].Cracks == 3 && Math.Abs(back2["Host"].MaxFall - 40) < 0.01 && Math.Abs(back2["Host"].Lost - 52.3) < 0.01, "shame round trip");
 Check(back2.ContainsKey("a:b") && Shame.Parse("junk;x:1,2").Count == 0, "odd nicks, junk");
 
+// Streamer mode hides addresses and codes, keeps clocks, ports and ordinary text.
+Check(StreamerMask.Apply("Подключено к хосту 26.12.34.56:7788") == "Подключено к хосту •.•.•.•:7788", "ipv4 + port");
+Check(StreamerMask.Apply("код ABCD-EFGH-JKMN готов") == "код ••••-••••-•••• готов", "invite code");
+Check(!StreamerMask.Apply("from [fe80::1c2d:3e4f]:7788").Contains("fe80") && !StreamerMask.Apply("2001:db8:85a3:0:0:8a2e:370:7334").Contains("db8"), "ipv6");
+Check(StreamerMask.Apply("t=10:41:09 пинг 80 мс, версия 5.4.23.5 тоже IP-подобна") == "t=10:41:09 пинг 80 мс, версия •.•.•.• тоже IP-подобна", "clock kept, dotted versions masked");
+
 Console.WriteLine("code example: " + code);
 Console.WriteLine("ALL OK");

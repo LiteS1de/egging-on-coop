@@ -68,3 +68,23 @@ namespace EggCoop
         }
     }
 }
+
+namespace EggCoop
+{
+    // Streamer mode text filter (Unity-free for src/SelfTest): IPv4, IPv6 and invite codes become dots.
+    public static class StreamerMask
+    {
+        static readonly System.Text.RegularExpressions.Regex Ipv4 = new System.Text.RegularExpressions.Regex(@"\b(?:\d{1,3}\.){3}\d{1,3}\b");
+        static readonly System.Text.RegularExpressions.Regex Ipv6 = new System.Text.RegularExpressions.Regex(@"\[?(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}\]?");
+        static readonly System.Text.RegularExpressions.Regex Code = new System.Text.RegularExpressions.Regex(@"\b[0-9A-Za-z]{4}-[0-9A-Za-z]{4}-[0-9A-Za-z]{4}\b");
+
+        public static string Apply(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            s = Code.Replace(s, "••••-••••-••••");
+            s = Ipv4.Replace(s, "•.•.•.•");
+            // A clock like 10:41:09 also looks like hex groups: only "::" or 4+ groups count as IPv6.
+            return Ipv6.Replace(s, m => m.Value.Contains("::") || m.Value.Split(':').Length > 3 ? "[•:•]" : m.Value);
+        }
+    }
+}

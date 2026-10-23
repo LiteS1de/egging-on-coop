@@ -191,3 +191,6 @@ Owner's report and what 0.3.0 does about it:
 - Emotes: no frame, fixed 56 px, whole-pixel position (scaling with camera distance + fractional pixels made the icon shimmer while its frame did not); own egg anchored to its rendered transform (GetPosition() is the 50 Hz physics pose); hidden while the wheel is open (it covered the ×).
 - Protocol unchanged (EggCoop/0.5): 0.5.0 and 0.5.1 play together.
 - PASS (one lab copy, -coop-socialdemo screenshots).
+
+## Streamer mode (2026-10-23, not released yet)
+- F9 toggle (config General.StreamerMode): invite codes, IPv4/IPv6 masked in the host address list, network log and toasts; join field becomes a password field; Копировать still copies the real value. StreamerMask in SocialMath.cs (SelfTest: ipv4+port, code, ipv6, clocks kept). PASS screenshot: F9 top shows only dots.
