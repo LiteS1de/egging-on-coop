@@ -10,16 +10,16 @@ namespace EggCoop
 {
     public class CoopConfig
     {
-        public ConfigEntry<string> Nick, SignalUrl, StunServers, LastJoin, TpStats;
+        public ConfigEntry<string> Nick, SignalUrl, StunServers, LastJoin, TpStats, ShameStats;
         public ConfigEntry<int> Port, GhostDelayMs;
-        public ConfigEntry<KeyCode> MenuKey, TpKey;
+        public ConfigEntry<KeyCode> MenuKey, TpKey, EmoteKey;
         public ConfigEntry<bool> Collide, CrackOnHit;
     }
 
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
-    public class Plugin : BaseUnityPlugin
+    public partial class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.4.4";
+        public const string Version = "0.5.0";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -54,6 +54,9 @@ namespace EggCoop
                 int c = part.LastIndexOf(':');
                 if (c > 0 && int.TryParse(part.Substring(c + 1), out var n)) tpCounts[part.Substring(0, c)] = n;
             }
+            cfg.EmoteKey = Config.Bind("General", "EmoteKey", KeyCode.G, "Зажать — колесо эмоций и меток");
+            cfg.ShameStats = Config.Bind("Stats", "Shame", "", "Доска позора (ник:разбился,падений,худшее,потеряно м;...)");
+            shame = Shame.Parse(cfg.ShameStats.Value);
             cfg.Port = Config.Bind("Network", "Port", 7788, "UDP-порт хоста");
             cfg.SignalUrl = Config.Bind("Network", "SignalUrl", "https://ntfy.sh", "ntfy-сервер для пробивки NAT");
             cfg.StunServers = Config.Bind("Network", "StunServers", "stun.l.google.com:19302,stun.cloudflare.com:3478", "STUN-серверы через запятую");
@@ -69,6 +72,7 @@ namespace EggCoop
             net.OnLeave += id => world?.PlayerLeft(id);
             net.OnSettings += ApplyHostSettings;
             net.OnEnded += Toast;
+            net.OnSocial += ReceiveSocial;
             try { world = new WorldSync(net, harmony); } catch (System.Exception e) { Log.LogError("World sync disabled: " + e); }
             Application.quitting += () => net.Stop();   // tell friends right away instead of letting them time out
             ApplyOwnSettings();
@@ -109,6 +113,8 @@ namespace EggCoop
                 else if (a[i] == "-coop-race") race = true;
                 else if (a[i] == "-coop-breaktest") breakTest = true;
                 else if (a[i] == "-coop-gomover") goMover = true;
+                else if (a[i] == "-coop-flagtest") flagTest = true;     // replay every world event as if a friend did it, then tour them
+                else if (a[i] == "-coop-socialdemo") socialDemo = true; // wheel, bubble, ping and board on screen for screenshots
                 else if (a[i] == "-coop-rebootat") float.TryParse(next, out rebootAt);   // go to the title and back after N s (world rebuild)
                 else if (a[i] == "-coop-uidemo") uiDemo = uiDemoPicker = true;
                 else if (a[i] == "-coop-pushtest") pushTest = true;   // guest throws the nearest free object every 12 s
@@ -183,8 +189,61 @@ namespace EggCoop
             if (uiDemo && toasts.Count == 0) Toast("Телепорт к Host — так выглядит оповещение");
             if (inGame && standTest && !net.IsHost) StandTestStep();
             if (inGame && tpTest && !net.IsHost && ghosts.Count > 0) { var g = ghosts.Values.First(); Log.LogInfo($"Lab tp: {TryTeleport(g)}"); nextLabStep += 9f; }
+            if (inGame && flagTest && world != null && world.Count > 0 && Time.unscaledTime > 45f) FlagTestStep();
+            if (inGame && socialDemo && Time.unscaledTime > 30f) SocialDemoStep();
 #endif
         }
+
+#if LAB
+        bool flagTest, socialDemo;
+        int flagPhase;
+        List<(string name, Vector3 at)> sights;
+        void FlagTestStep()
+        {
+            if (flagPhase == 0)
+            {
+                sights = world.LabSights();
+                // Look at each event before the replay, then after it: the screenshots show the change.
+                foreach (var s in sights) Log.LogInfo($"Lab sight: {s.name} at {s.at}");
+            }
+            int n = sights.Count;
+            if (flagPhase < n) { var s = sights[flagPhase]; Place(s.at + new Vector3(0f, 3f, -4f)); Log.LogInfo($"Lab look before: {s.name}"); }
+            else if (flagPhase == n) world.LabFlags();
+            else if (flagPhase <= 2 * n) { var s = sights[flagPhase - n - 1]; Place(s.at + new Vector3(0f, 3f, -4f)); Log.LogInfo($"Lab look after: {s.name} {world.LabFlagState()}"); }
+            else { Log.LogInfo($"Lab flags: after {world.LabFlagState()}"); flagTest = false; }
+            flagPhase++;
+            nextLabStep += 3f;   // 6 s per stop: land, settle, screenshot
+        }
+
+        int demoStep;
+        void SocialDemoStep()
+        {
+            var egg = World.instance.GetEgg().GetPosition();
+            var cam = Camera.main;
+            switch (demoStep++ % 4)
+            {
+                case 0:
+                    SetMenu(false);
+                    shame["Petya"] = new Shame { Cracks = 4, Falls = 9, MaxFall = 37f, Lost = 212f };
+                    shame["Vasya"] = new Shame { Cracks = 1, Falls = 3, MaxFall = 12f, Lost = 30f };
+                    labHover = 2; bubbles[-1] = (2, Time.unscaledTime);
+                    break;
+                case 1:
+                    labHover = -1;
+                    PlacePing(new Vector2(Screen.width / 2f, Screen.height * 0.25f));
+                    Log.LogInfo($"Lab ping: {(pings.TryGetValue(-1, out var p) ? p.at.ToString() : "none")} egg={egg} cam={(cam != null ? cam.transform.position.ToString() : "-")}");
+                    bubbles[-1] = (6, Time.unscaledTime);
+                    break;
+                case 2:
+                    labHover = 7;
+                    if (cam != null) pings[-1] = (egg - cam.transform.forward * 8f, Time.unscaledTime);   // behind the camera: pinned to the edge
+                    break;
+                case 3:
+                    labHover = -1; SetMenu(true);
+                    break;
+            }
+        }
+#endif
 
 #if LAB
         // "-coop-standtest" (guest): drop onto the host's ghost from 1.5 m, then from 40 m, and log where we ended up
@@ -495,6 +554,7 @@ namespace EggCoop
                 if (Time.unscaledTime - kv.Value.LastSeen > GhostTimeout) { RemoveGhost(kv.Key); continue; }
                 kv.Value.Update(inGame);
             }
+            SocialTick(inGame);
             if (pickerUntil > 0 && (Time.unscaledTime > pickerUntil || ghosts.Count < 2)) pickerUntil = 0;
             if (net.Active && net.IsHost && hostAddrs == null) hostAddrs = LocalAddresses(cfg.Port.Value);
             if (!net.Active) hostAddrs = null;
@@ -508,7 +568,7 @@ namespace EggCoop
         void HandleKeys()
         {
             if (Input.GetKeyDown(cfg.MenuKey.Value)) SetMenu(!menuOpen);
-            if (menuOpen) return;
+            if (menuOpen || HandleSocialKeys()) return;
             if (Input.GetKeyDown(cfg.TpKey.Value))
             {
                 var others = Others();
@@ -592,6 +652,7 @@ namespace EggCoop
             if (!core.yolkState) { core.transform.SetPositionAndRotation(pos, Quaternion.identity); egg.SetVelocities(Vector3.zero, Vector3.zero); }
             else egg.GetRawTransform().SetPositionAndRotation(pos, Quaternion.identity);
             World.instance.GetProgress().Teleport(pos.y);
+            fall.Reset(pos.y);   // moving by teleport is not falling
         }
 
 #if LAB
@@ -626,10 +687,8 @@ namespace EggCoop
         {
             menuOpen = open;
             waitKey = null;
-            Cursor.lockState = open ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = open;
-            // Typing a nick must not roll the egg, and moving the mouse over the menu must not turn the camera.
-            try { Rewired.ReInput.controllers.Keyboard.enabled = !open; Rewired.ReInput.controllers.Mouse.enabled = !open; } catch { }
+            if (open) { wheelOpen = aiming = false; }
+            UpdateCursor();
         }
 
         public static void Notify(string text) => instance?.Toast(text);
@@ -774,6 +833,7 @@ namespace EggCoop
             GUI.skin.verticalScrollbarThumb.border = thumbBorder; GUI.skin.verticalScrollbarThumb.fixedWidth = 8;
             GUI.skin.verticalScrollbarUpButton.fixedHeight = GUI.skin.verticalScrollbarDownButton.fixedHeight = 0;
             GUI.skin.textField.normal.textColor = GUI.skin.textField.focused.textColor = GUI.skin.textField.hover.textColor = Color.white;
+            InitSocialStyles(font, panel, panelBorder);
             Log.LogInfo($"UI styled: font={(font != null ? font.name : "default")} panel={(panel.width > 1)} egg={(eggIcon != null)}");
         }
 
@@ -797,13 +857,15 @@ namespace EggCoop
             var e = Event.current;
             if (waitKey != null && e.type == EventType.KeyDown && e.keyCode != KeyCode.None)
             {
-                if (e.keyCode != KeyCode.Escape) (waitKey == "menu" ? cfg.MenuKey : cfg.TpKey).Value = e.keyCode;
+                if (e.keyCode != KeyCode.Escape) (waitKey == "menu" ? cfg.MenuKey : waitKey == "emote" ? cfg.EmoteKey : cfg.TpKey).Value = e.keyCode;
                 waitKey = null;
                 ignoreKeysFrame = Time.frameCount + 1;   // the same press must not also open the menu or teleport
                 e.Use();
             }
             DrawNameTags();
+            DrawSocial();
             DrawToasts();
+            if ((wheelOpen || labHover >= 0) && wheelDisc != null) DrawWheel();
             if (pickerUntil > 0 || (uiDemoPicker && ghosts.Count > 0)) DrawPicker();
             if (summaryUntil > Time.unscaledTime) DrawSummary(new Rect(40, 40, 360, 0));
             if (menuOpen)
@@ -861,6 +923,8 @@ namespace EggCoop
             var lines = new List<string> { "<color=#FFA727>ИТОГИ КООПЕРАТИВА · ТЕЛЕПОРТЫ</color>", $"Вы ({cfg.Nick.Value}): {tpCounts.Values.Sum()}" };
             foreach (var kv in tpCounts.OrderByDescending(kv => kv.Value)) lines.Add($"    к {kv.Key}: {kv.Value}");
             foreach (var g in Others()) lines.Add($"{g.Nick}: {g.TpTotal}");
+            var board = ShameLines();
+            if (board.Count > 0) { lines.Add(""); lines.Add("<color=#FFA727>ДОСКА ПОЗОРА</color>"); lines.AddRange(board); }
             string text = string.Join("\n", lines);
             var size = sPanel.CalcSize(new GUIContent(text));
             GUI.Box(new Rect(at.x, at.y, Mathf.Max(at.width, size.x), size.y), text, sPanel);
@@ -969,10 +1033,13 @@ namespace EggCoop
                 if (world != null) GUILayout.Label($"Общий мир: {world.Count} предметов · ведёте {world.Owned} · у друзей {world.Following}", sDim);
             }
 
+            DrawShameBoard();
+
             GUILayout.Label(("Клавиши").ToUpperInvariant(), sHead);
             KeyRow("Меню кооператива", "menu", cfg.MenuKey);
             KeyRow("Телепорт к другу", "tp", cfg.TpKey);
-            GUILayout.Label("При двух и более друзьях клавиша телепорта открывает выбор: нажмите цифру нужного игрока.", sDim);
+            KeyRow("Эмоции и метки", "emote", cfg.EmoteKey);
+            GUILayout.Label("При двух и более друзьях клавиша телепорта открывает выбор: нажмите цифру нужного игрока. Эмоции: зажмите клавишу, наведите мышь на картинку и отпустите.", sDim);
 
             GUILayout.Space(8);
             GUILayout.BeginHorizontal();

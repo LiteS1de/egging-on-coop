@@ -29,7 +29,7 @@ namespace EggCoop
     // Connection setup follows sa-coop: UPnP -> STUN -> invite code -> UDP hole punch via ntfy -> (VPN / direct IP fallback).
     public class CoopNet : INetEventListener
     {
-        public const string ConnectKey = "EggCoop/0.4";   // also a version check: different mod versions refuse each other
+        public const string ConnectKey = "EggCoop/0.5";   // also a version check: different mod versions refuse each other
         public const int MaxPlayers = 4;
         const byte MsgState = 1, MsgLeave = 2, MsgSettings = 3, MsgWelcome = 4, MsgWorld = 5, MsgClock = 6;
         static readonly byte[] Punch = Encoding.ASCII.GetBytes("EGGPUNCH");
@@ -46,6 +46,8 @@ namespace EggCoop
         public event Action<bool, bool> OnSettings;
         public event Action<string> OnEnded;
         public event Action<int, NetPacketReader> OnWorld;   // (sender player id, payload) for WorldSync
+        public event Action<int, NetPacketReader> OnSocial;  // same channel, payload types >= SocialBase: emotes, pings, stats
+        public const byte SocialBase = 20;
         public int MyId => IsHost ? 0 : myId;               // host is 0, guests peer.Id + 1 (told by the host)
         public bool Connected => manager != null && (IsHost || (hostPeer != null && myId > 0));
         int myId;
@@ -420,7 +422,7 @@ namespace EggCoop
                     var relay = new NetDataWriter(); relay.Put(MsgWorld); relay.Put((byte)id); relay.Put(r.RawData, r.Position, r.AvailableBytes);
                     foreach (var p in manager.ConnectedPeerList) if (p != peer) p.Send(relay, method);
                 }
-                try { OnWorld?.Invoke(id, r); } catch (Exception e) { Plugin.Warn("world", e); }
+                try { (r.AvailableBytes > 0 && r.PeekByte() >= SocialBase ? OnSocial : OnWorld)?.Invoke(id, r); } catch (Exception e) { Plugin.Warn("world", e); }
                 r.Recycle();
                 return;
             }

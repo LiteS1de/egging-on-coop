@@ -9,7 +9,7 @@
 # kill any copy that does not report its isolated data dir, check RAM first, and snapshot + verify the real save
 # folder around every run (stop and report if it changed; never restore automatically: on 2026-10-23 a stale
 # guard from an earlier run "restored" over the owner's real playthrough).
-param([ValidateSet("up", "down", "log", "pack")] [string]$cmd = "up", [string]$extra = "dev", [string]$join = "127.0.0.1:7788", [string]$hostArgs = "", [string]$guestArgs = "")
+param([ValidateSet("up", "down", "log", "pack")] [string]$cmd = "up", [string]$extra = "dev", [string]$join = "127.0.0.1:7788", [string]$hostArgs = "", [string]$guestArgs = "", [switch]$solo)
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot
 $real = "$env:USERPROFILE\AppData\LocalLow\Egobounds\Egging On"
@@ -62,7 +62,7 @@ function Start-Copy($n, $coopArgs) {
     $log = "$dir\BepInEx\LogOutput.log"
     Remove-Item "$dir\BepInEx\coop-shots", $log, "$dir\BepInEx\coop-probe.txt", "$dir\BepInEx\coop-delay.txt" -Recurse -ErrorAction SilentlyContinue
     if (Test-Path $log) { throw "p$n log is still locked - an old copy is alive" }
-    $a = "-screen-fullscreen 0 -screen-width 960 -screen-height 540 $extra $coopArgs -coop-shot 10 -coop-lab -coop-data `"$dir\userdata`""
+    $a = "-screen-fullscreen 0 -screen-width 960 -screen-height 540 $extra -coop-shot 10 $coopArgs -coop-lab -coop-data `"$dir\userdata`""
     $p = Start-Process "$dir\Egging On.exe" -ArgumentList $a -WorkingDirectory $dir -PassThru
     # The plugin isolates the data dir in its Awake, before the game reads any save. No report = no isolation.
     for ($i = 0; $i -lt 90; $i++) {
@@ -87,6 +87,7 @@ switch ($cmd) {
         Save-Guard
         dotnet build "$root\src\EggCoop" -c Lab -p:Deploy=true | Select-String "error|Build succeeded|успешно"
         Start-Copy 1 "-coop-nick Host -coop-host $hostArgs"
+        if ($solo) { return }   # one copy only: two no longer fit in RAM next to the owner's other apps (2026-10-23)
         # Two copies loading the world at the same time starve each other; Windows then flags one as "not responding"
         # (happened 2026-10-23). Let the host reach the world first.
         for ($i = 0; $i -lt 150 -and -not (Select-String "$root\lab\p1\BepInEx\LogOutput.log" -Pattern "World sync: \d+ bodies" -Quiet); $i++) { Start-Sleep 1 }
@@ -109,7 +110,8 @@ switch ($cmd) {
         Copy-Item "$out\EggCoop.dll", "$out\LiteNetLib.dll", "$out\Mono.Nat.dll" "$stage\BepInEx\plugins\EggCoop"
         Copy-Item "$root\lab\p1\BepInEx\config\BepInEx.cfg" "$stage\BepInEx\config"
         Copy-Item "$root\dist-files\*" $stage
-        $zip = "$root\dist\EggCoop-0.4.4.zip"
+        $ver = ([xml](Get-Content "$root\src\EggCoop\EggCoop.csproj")).Project.PropertyGroup.Version | Select-Object -First 1
+        $zip = "$root\dist\EggCoop-$ver.zip"
         Compress-Archive "$stage\*" $zip -Force
         Get-Item $zip | Select-Object FullName, Length
     }

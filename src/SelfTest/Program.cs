@@ -38,5 +38,32 @@ try
 }
 catch (Exception e) { Console.WriteLine("live STUN skipped: " + e.Message); }
 
+// Emote wheel: 8 slices clockwise from the top, centre closes.
+Check(SocialMath.Sector(0, 0, 30, 8) == -1 && SocialMath.Sector(10, 10, 30, 8) == -1, "centre");
+Check(SocialMath.Sector(0, -100, 30, 8) == 0 && SocialMath.Sector(100, 0, 30, 8) == 2, "top, right");
+Check(SocialMath.Sector(0, 100, 30, 8) == 4 && SocialMath.Sector(-100, 0, 30, 8) == 6, "bottom, left");
+Check(SocialMath.Sector(70, -70, 30, 8) == 1 && SocialMath.Sector(-20, -100, 30, 8) == 0 && SocialMath.Sector(-70, -70, 30, 8) == 7, "diagonals, wrap");
+Check(SocialMath.Sector(0, -900, 30, 8) == 0, "past the rim");
+
+// Falls: a drop counts once the egg rests; small bumps and slow climbs do not.
+var ft = new FallTracker(); ft.Reset(100);
+float got = 0;
+for (int i = 0; i < 60; i++) got += ft.Step(100 - i * 0.5f, 8f, 0.02f);   // falling 30 m, fast
+Check(got == 0, "no count mid-air");
+for (int i = 0; i < 40; i++) got += ft.Step(70, 0.1f, 0.02f);              // resting 0.8 s
+Check(Math.Abs(got - 30f) < 0.01f, "fall counted once: " + got);
+for (int i = 0; i < 40; i++) got += ft.Step(68, 0.1f, 0.02f);              // 2 m lower after a nudge
+Check(Math.Abs(got - 30f) < 0.01f, "small drop ignored");
+ft.Reset(200); got = 0;                                                       // teleported up
+for (int i = 0; i < 40; i++) got += ft.Step(200, 0.1f, 0.02f);
+Check(got == 0, "teleport is not a fall");
+
+// Shame board survives a config round trip.
+var sh = new System.Collections.Generic.Dictionary<string, Shame> { ["Host"] = new Shame { Cracks = 3 }, ["a:b"] = new Shame() };
+sh["Host"].AddFall(12.34f); sh["Host"].AddFall(40f);
+var back2 = Shame.Parse(Shame.Format(sh));
+Check(back2.Count == 2 && back2["Host"].Falls == 2 && back2["Host"].Cracks == 3 && Math.Abs(back2["Host"].MaxFall - 40) < 0.01 && Math.Abs(back2["Host"].Lost - 52.3) < 0.01, "shame round trip");
+Check(back2.ContainsKey("a:b") && Shame.Parse("junk;x:1,2").Count == 0, "odd nicks, junk");
+
 Console.WriteLine("code example: " + code);
 Console.WriteLine("ALL OK");

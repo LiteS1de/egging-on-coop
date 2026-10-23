@@ -159,3 +159,22 @@ Owner's report and what 0.3.0 does about it:
   in RAM next to the owner's other apps: the guest copy loaded at 1 frame / 15 s and hung twice even with the host
   loading first (lab.ps1 now waits for "World sync: N bodies" on p1). Check both in a real session instead: a bottle
   someone breaks must vanish for everyone; a moving platform must be at the same spot on both screens.
+
+## 0.5.0 (2026-10-23): world events, shared checkpoints, emotes, pings, shame board
+- Protocol EggCoop/0.5 (0.4 refuses it). Social messages ride the world channel with type >= 20 (Net dispatches by peek).
+- World events (WorldFlags.cs, OR merge, whole set per message, sent on change + to each joining guest):
+  windowBroken (PigeonWindow.BreakWindow), microwaveOpened (feedback + timeline, no achievement/comment/unstuck change),
+  bellBroken (hide bell, RayFire demolish), pipeEndDetached, OneTimeEvent hashes (not OneTimeFeedbackTrigger: those are
+  narrator lines). Only 1 OneTimeEvent in the scene ("Soft Quacked").
+  Shared checkpoint = highestDroneLandingHash via DronePaths.TryActivateLanding + pad button + lower pads; only when the
+  save has checkpoints (droneMode != None). Not shared: owl (guides each player), frying pan, rooster boss (owner: made for one).
+- PASS (one lab copy, -coop-flagtest): all four flags applied; after visiting: window shows broken, microwave door open +
+  sparrow out, bell hidden. Drone untested: the lab save has no checkpoints (droneMode=None).
+- Emote wheel: hold G, hover, release (or click); centre × / Esc closes. 7 emotes + "Метка" (then click a spot; raycast
+  skips eggs). Twemoji 15.1 PNGs embedded (CC-BY, credited in Инструкция). Bubble 3.5 s over the egg, ping 12 s, pinned
+  to the screen edge when off screen/behind. PASS screenshots (-coop-socialdemo).
+- Shame board: own cracks (crackCount delta), falls (FallTracker: rest after >= 4 m drop; teleport resets), worst fall,
+  height lost; persisted per nick in [Stats] Shame, broadcast every 3 s, falls >= 15 m toasted to all; host can reset all.
+  Shown in F9 and on the credits summary. Pure logic checked in src/SelfTest.
+- NOT VERIFIED between two players (RAM: two copies hang this PC now): emotes/pings/stats over the network, events
+  reaching a friend, drone pads. lab.ps1 up -solo runs one copy.

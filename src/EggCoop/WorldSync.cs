@@ -39,7 +39,7 @@ namespace EggCoop
     // The egg that touches a free object claims it, the host settles races (first claim wins), objects knocked by an
     // owned object join the owner, and an object that comes to rest is released.
     // Objects are matched across PCs by scene + hierarchy path (same game version = same path).
-    public class WorldSync
+    public partial class WorldSync
     {
         const byte WState = 1, WClaim = 2, WOwner = 3, WSnapReq = 4, WSnap = 5, WBroken = 6;
         const float SendInterval = 0.05f, RestTime = 1f, TouchHold = 0.5f;
@@ -117,13 +117,14 @@ namespace EggCoop
                     Merge(a.G, c.G);
             foreach (var g in bodies.Values.Select(b => b.G).Distinct()) groups[g.Id] = g;
             foreach (var id in Persistent.instance.saveData.brokenObjects) knownBroken.Add(id);
+            RegisterFlags();
             Plugin.Log.LogInfo($"World sync: {bodies.Count} bodies in {groups.Count} groups ({dup} duplicate paths skipped)");
         }
 
         void Unregister()
         {
             bodies.Clear(); byRb.Clear(); groups.Clear(); knownBroken.Clear();
-            registered = false; snapshotAsked = false;
+            registered = false; snapshotAsked = false; flagsSent = null;
             Plugin.Log.LogInfo("World sync: world was rebuilt, registering again");
         }
 
@@ -169,13 +170,14 @@ namespace EggCoop
             {
                 // Lost the link: let go of what friends were moving. Back again: ask the host for its world once more.
                 if (!conn) foreach (var g in groups.Values) if (g.Owner != net.MyId) SetOwner(g, -1);
-                snapshotAsked = false;
+                snapshotAsked = false; flagsSent = null;
             }
             wasConnected = conn;
             if (!registered || !conn || registeredFor != World.instance) return;
             if (!net.IsHost && !snapshotAsked) { snapshotAsked = true; var w = net.WorldWriter(); w.Put(WSnapReq); net.SendWorld(w, DeliveryMethod.ReliableOrdered); }
             float now = Time.unscaledTime;
             WatchBroken();
+            WatchFlags();
             if (now < nextSend) return;
             nextSend = now + SendInterval;
 
@@ -325,7 +327,7 @@ namespace EggCoop
                     break;
                 }
                 case WSnapReq:
-                    if (net.IsHost) SendSnapshot(from);
+                    if (net.IsHost) { SendSnapshot(from); SendFlags(CaptureFlags(), from); }
                     break;
                 case WSnap:
                 {
@@ -345,6 +347,9 @@ namespace EggCoop
                 }
                 case WBroken:
                     Break(r.GetInt());
+                    break;
+                case WFlags:
+                    ApplyFlags(ReadFlags(r), from);
                     break;
             }
         }
@@ -455,7 +460,7 @@ namespace EggCoop
 
         public void Reset()
         {
-            snapshotAsked = false;
+            snapshotAsked = false; flagsSent = null;
             foreach (var g in groups.Values) SetOwner(g, -1);
             SharedClock.Reset();
         }

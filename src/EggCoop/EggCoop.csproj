@@ -4,7 +4,7 @@
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <AssemblyName>EggCoop</AssemblyName>
-    <Version>0.4.4</Version>
+    <Version>0.5.0</Version>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GameDir Condition="'$(GameDir)' == ''">$(MSBuildThisFileDirectory)..\..\lab\p1</GameDir>
     <Managed>$(GameDir)\Egging On_Data\Managed</Managed>
@@ -15,6 +15,11 @@
   <ItemGroup>
     <PackageReference Include="LiteNetLib" Version="1.3.1" />
     <PackageReference Include="Mono.Nat" Version="3.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Twemoji 15.1 icons (CC-BY 4.0) for the emote wheel, loaded by name: emote.<codepoint> -->
+    <EmbeddedResource Include="emotes\*.png" LogicalName="emote.%(Filename)" />
   </ItemGroup>
 
   <ItemGroup>
