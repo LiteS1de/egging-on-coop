@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360">
+  <defs>
+    <radialGradient id="bg" cx="0.72" cy="0.35" r="0.9">
+      <stop offset="0" stop-color="#3a2614"/>
+      <stop offset="0.55" stop-color="#1a120b"/>
+      <stop offset="1" stop-color="#0c0906"/>
+    </radialGradient>
+    <radialGradient id="egg" cx="0.36" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.6" stop-color="#f3d9b6"/>
+      <stop offset="1" stop-color="#c9935f"/>
+    </radialGradient>
+    <radialGradient id="eggB" cx="0.36" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fff1dc"/>
+      <stop offset="0.6" stop-color="#e9b98a"/>
+      <stop offset="1" stop-color="#a8683a"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFA727" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#FFA727" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#000" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="url(#bg)"/>
+  <circle cx="1000" cy="200" r="260" fill="url(#glow)"/>
+
+  <!-- dotted teleport arc between the eggs -->
+  <path d="M850 160 Q 930 40 1010 150" fill="none" stroke="#FFA727" stroke-width="4" stroke-dasharray="2 12" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- egg 1 with a speech bubble -->
+  <ellipse cx="850" cy="300" rx="56" ry="12" fill="url(#shadow)"/>
+  <path transform="translate(850 238) scale(1.25)" d="M0,-50 C26,-50 40,-14 40,10 C40,36 22,50 0,50 C-22,50 -40,36 -40,10 C-40,-14 -26,-50 0,-50 Z" fill="url(#egg)"/>
+  <rect x="796" y="104" width="108" height="50" rx="16" fill="#000" fill-opacity="0.78" stroke="#fff" stroke-opacity="0.15"/>
+  <path d="M840 154 L850 168 L860 154 Z" fill="#000" fill-opacity="0.78"/>
+  <text x="850" y="138" text-anchor="middle" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="26" font-weight="800" fill="#FFA727">GG!</text>
+
+  <!-- egg 2, cracked -->
+  <ellipse cx="1010" cy="304" rx="64" ry="13" fill="url(#shadow)"/>
+  <path transform="translate(1010 232) scale(1.42)" d="M0,-50 C26,-50 40,-14 40,10 C40,36 22,50 0,50 C-22,50 -40,36 -40,10 C-40,-14 -26,-50 0,-50 Z" fill="url(#eggB)"/>
+  <polyline points="955,226 972,212 986,230 1002,210 1018,232 1034,212 1048,228 1066,216" fill="none" stroke="#6b3d1c" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+
+  <!-- egg 3 with a ping above -->
+  <ellipse cx="1162" cy="300" rx="46" ry="10" fill="url(#shadow)"/>
+  <path transform="translate(1162 250) scale(1.0)" d="M0,-50 C26,-50 40,-14 40,10 C40,36 22,50 0,50 C-22,50 -40,36 -40,10 C-40,-14 -26,-50 0,-50 Z" fill="url(#egg)"/>
+  <line x1="1162" y1="150" x2="1162" y2="186" stroke="#cfd6dd" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="1162" cy="138" r="16" fill="#e8364a"/>
+  <circle cx="1156" cy="133" r="5" fill="#fff" fill-opacity="0.5"/>
+  <text x="72" y="150" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="78" font-weight="800" fill="#ffffff" letter-spacing="2">EGGING ON</text>
+  <text x="72" y="228" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="78" font-weight="800" fill="#FFA727" letter-spacing="2">CO-OP</text>
+  <text x="76" y="282" font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="21" fill="#d9cfc4">2–4 players · shared world · teleport · emotes · shame board</text>
+</svg>

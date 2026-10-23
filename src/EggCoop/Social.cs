@@ -269,8 +269,7 @@ namespace EggCoop
                 float pop = age < 0.18f ? Mathf.Sin(age / 0.18f * Mathf.PI * 0.75f) / 0.707f : 1f;
                 float size = Mathf.Clamp(900f / sp.z, 44f, 76f) * Mathf.Max(0.3f, pop);
                 GUI.color = new Color(1, 1, 1, Mathf.Clamp01((EmoteTime - age) * 2f));
-                var box = new Rect(sp.x - size / 2, Screen.height - sp.y - size, size, size);
-                GUI.Box(box, GUIContent.none, sBubble);
+                var box = new Rect(sp.x - size / 2, Screen.height - sp.y - size, size, size);                GUI.Box(box, GUIContent.none, sBubble);
                 GUI.DrawTexture(new Rect(box.x + size * 0.14f, box.y + size * 0.14f, size * 0.72f, size * 0.72f), emoteTex[kv.Value.emote], ScaleMode.ScaleToFit);
             }
             foreach (var kv in pings.ToList())

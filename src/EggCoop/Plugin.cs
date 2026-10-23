@@ -241,6 +241,7 @@ namespace EggCoop
                     break;
                 case 3:
                     labHover = -1; SetMenu(true);
+                    menuScroll.y = demoStep > 4 ? 100000f : 0f;   // second round: the bottom of the menu (shame board, keys)
                     break;
             }
         }
