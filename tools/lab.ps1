@@ -101,10 +101,10 @@ switch ($cmd) {
     }
     "pack" {
         # dist/EggCoop-<ver>.zip, everything a player needs, no downloads:
-        #   Установить.bat / Удалить.bat   -> installer\*.ps1 (find the game, add BepInEx if missing, copy the mod)
+        #   Install.bat / Uninstall.bat     -> installer\*.ps1 (find the game, add BepInEx if missing, copy the mod)
         #   files\game\                     -> laid out like the game folder: BepInEx 5.4.23.5 (MIT), its config with
         #                                      HideManagerGameObject=true (the game kills the visible manager), the plugin
-        #   Инструкция.txt, licenses\
+        #   Инструкция.txt (ru), Instructions.txt (en), licenses\
         $bepZip = "$root\downloads\BepInEx_win_x64_5.4.23.5.zip"
         if (-not (Test-Path $bepZip)) {
             New-Item -ItemType Directory -Force (Split-Path $bepZip) | Out-Null
@@ -112,6 +112,7 @@ switch ($cmd) {
         }
         if ((Get-FileHash $bepZip).Hash -ne "82F9878551030F54657792C0740D9D51A09500EEAE1FBA21106B0C441E6732C4") { throw "BepInEx zip hash mismatch: $bepZip" }
         dotnet build "$root\src\EggCoop" -c Release | Select-String "error|успешно"
+        if ($LASTEXITCODE) { throw "Release build failed: no zip" }
         $stage = "$root\dist\stage"
         Remove-Item $stage -Recurse -ErrorAction SilentlyContinue
         $game = "$stage\files\game"

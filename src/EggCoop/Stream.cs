@@ -5,6 +5,8 @@ using LiteNetLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Viewer effects for streamers. Viewers pay (Twitch channel points / bits, see Twitch.cs) and the effect plays on
@@ -18,7 +20,10 @@ namespace EggCoop
 
         class EffectDef
         {
-            public string Id, Name, Group, Desc;   // Desc: the tooltip in F9
+            public string Id, Ru, En, RuGroup, EnGroup, RuDesc, EnDesc;
+            public string Name => T(Ru, En);
+            public string Group => T(RuGroup, EnGroup);
+            public string Desc => T(RuDesc, EnDesc);   // the tooltip in F9
             public float Duration;          // 0 = instant
             public int Points, Bits, Cooldown;
         }
@@ -26,16 +31,16 @@ namespace EggCoop
         // Default prices: channel points come at ~300-500 an hour per viewer, 1 bit is about 1 cent.
         static readonly EffectDef[] Effects =
         {
-            new EffectDef { Id = "emote", Name = "Эмоция от зрителя", Desc = "Над вашим яйцом на 3,5 с всплывает случайная эмоция с ником зрителя. Её видят и друзья. На игру не влияет.", Group = "Безобидные", Points = 100, Bits = 10, Cooldown = 10 },
-            new EffectDef { Id = "confetti", Name = "Конфетти", Desc = "Около трёх секунд на экран сыплется конфетти. На игру не влияет.", Group = "Безобидные", Points = 200, Bits = 20, Cooldown = 20 },
-            new EffectDef { Id = "wind", Name = "Порыв ветра", Desc = "Толкает яйцо в случайную сторону (около 3,5 м/с вбок и немного вверх). Может сдвинуть с края.", Group = "Толчки", Points = 500, Bits = 50, Cooldown = 30 },
-            new EffectDef { Id = "hop", Name = "Подпрыгнуть", Desc = "Подбрасывает яйцо прямо вверх примерно на полметра.", Group = "Толчки", Points = 400, Bits = 40, Cooldown = 30 },
-            new EffectDef { Id = "moon", Name = "Лунная гравитация", Desc = "На 15 с гравитация втрое слабее: прыжки выше, падения медленнее. Действует на всю физику у вас в игре.", Group = "Хаос", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
-            new EffectDef { Id = "slowmo", Name = "Замедление", Desc = "На 10 с вся игра у вас идёт на 60 % скорости. У друзей время не меняется.", Group = "Хаос", Duration = 10, Points = 1500, Bits = 150, Cooldown = 90 },
-            new EffectDef { Id = "ice", Name = "Скользкое яйцо", Desc = "На 15 с у яйца пропадает трение: оно скользит, как по льду, и хуже держится на склонах.", Group = "Хаос", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
-            new EffectDef { Id = "flip", Name = "Камера вверх ногами", Desc = "На 10 с картинка переворачивается вверх ногами. Управление остаётся прежним.", Group = "Хаос", Duration = 10, Points = 2000, Bits = 200, Cooldown = 120 },
-            new EffectDef { Id = "tofriend", Name = "Телепорт к другу", Desc = "Переносит вас к случайному другу, как телепорт на T. Если друзей нет в сети, эффект ждёт минуту, потом баллы возвращаются.", Group = "Кооператив", Points = 2500, Bits = 250, Cooldown = 180 },
-            new EffectDef { Id = "pullfriend", Name = "Друга — к стримеру", Desc = "Переносит случайного друга к вам. Только для друзей, которые разрешили это у себя в F9 → «Стрим».", Group = "Кооператив", Points = 2500, Bits = 250, Cooldown = 180 },
+            new EffectDef { Id = "emote", Ru = "Эмоция от зрителя", En = "Viewer emote", RuDesc = "Над вашим яйцом на 3,5 с всплывает случайная эмоция с ником зрителя. Её видят и друзья. На игру не влияет.", EnDesc = "A random emote with the viewer's nick pops up over your egg for 3.5 s. Friends see it too. No effect on the game.", RuGroup = "Безобидные", EnGroup = "Harmless", Points = 100, Bits = 10, Cooldown = 10 },
+            new EffectDef { Id = "confetti", Ru = "Конфетти", En = "Confetti", RuDesc = "Около трёх секунд на экран сыплется конфетти. На игру не влияет.", EnDesc = "Confetti rains over the screen for about three seconds. No effect on the game.", RuGroup = "Безобидные", EnGroup = "Harmless", Points = 200, Bits = 20, Cooldown = 20 },
+            new EffectDef { Id = "wind", Ru = "Порыв ветра", En = "Gust of wind", RuDesc = "Толкает яйцо в случайную сторону (около 3,5 м/с вбок и немного вверх). Может сдвинуть с края.", EnDesc = "Pushes the egg in a random direction (about 3.5 m/s sideways and a bit up). Can knock it off an edge.", RuGroup = "Толчки", EnGroup = "Pushes", Points = 500, Bits = 50, Cooldown = 30 },
+            new EffectDef { Id = "hop", Ru = "Подпрыгнуть", En = "Hop", RuDesc = "Подбрасывает яйцо прямо вверх примерно на полметра.", EnDesc = "Tosses the egg straight up about half a metre.", RuGroup = "Толчки", EnGroup = "Pushes", Points = 400, Bits = 40, Cooldown = 30 },
+            new EffectDef { Id = "moon", Ru = "Лунная гравитация", En = "Moon gravity", RuDesc = "На 15 с гравитация втрое слабее: прыжки выше, падения медленнее. Действует на всю физику у вас в игре.", EnDesc = "Gravity is three times weaker for 15 s: higher jumps, slower falls. Affects all physics in your game.", RuGroup = "Хаос", EnGroup = "Chaos", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
+            new EffectDef { Id = "slowmo", Ru = "Замедление", En = "Slow motion", RuDesc = "На 10 с вся игра у вас идёт на 60 % скорости. У друзей время не меняется.", EnDesc = "Your whole game runs at 60% speed for 10 s. Friends' time is unchanged.", RuGroup = "Хаос", EnGroup = "Chaos", Duration = 10, Points = 1500, Bits = 150, Cooldown = 90 },
+            new EffectDef { Id = "ice", Ru = "Скользкое яйцо", En = "Slippery egg", RuDesc = "На 15 с у яйца пропадает трение: оно скользит, как по льду, и хуже держится на склонах.", EnDesc = "The egg loses its grip for 15 s: it slides as if on ice and holds worse on slopes.", RuGroup = "Хаос", EnGroup = "Chaos", Duration = 15, Points = 1500, Bits = 150, Cooldown = 90 },
+            new EffectDef { Id = "flip", Ru = "Камера вверх ногами", En = "Upside-down camera", RuDesc = "На 10 с картинка переворачивается вверх ногами. Управление остаётся прежним.", EnDesc = "The picture turns upside down for 10 s. Controls stay the same.", RuGroup = "Хаос", EnGroup = "Chaos", Duration = 10, Points = 2000, Bits = 200, Cooldown = 120 },
+            new EffectDef { Id = "tofriend", Ru = "Телепорт к другу", En = "Teleport to a friend", RuDesc = "Переносит вас к случайному другу, как телепорт на T. Если друзей нет в сети, эффект ждёт минуту, потом баллы возвращаются.", EnDesc = "Moves you to a random friend, like the T teleport. If no friends are online, the effect waits a minute, then the points are refunded.", RuGroup = "Кооператив", EnGroup = "Co-op", Points = 2500, Bits = 250, Cooldown = 180 },
+            new EffectDef { Id = "pullfriend", Ru = "Друга — к стримеру", En = "Friend to the streamer", RuDesc = "Переносит случайного друга к вам. Только для друзей, которые разрешили это у себя в F9 → «Стрим».", EnDesc = "Moves a random friend to you. Only friends who allowed it in their F9, Stream tab.", RuGroup = "Кооператив", EnGroup = "Co-op", Points = 2500, Bits = 250, Cooldown = 180 },
         };
 
         class EffectCfg { public ConfigEntry<bool> On; public ConfigEntry<int> Points, Bits, Cooldown; }
@@ -54,17 +59,17 @@ namespace EggCoop
 
         void InitStream()
         {
-            streamEffects = Config.Bind("Stream", "Effects", false, "Эффекты от зрителей (Twitch: баллы канала и bits)");
-            allowPull = Config.Bind("Stream", "AllowFriendStreamerPull", true, "Разрешить друзьям-стримерам переносить моё яйцо к себе (эффект зрителей)");
-            streamGap = Config.Bind("Stream", "GapSeconds", 12, "Не чаще одного эффекта за столько секунд");
-            streamPauseKey = Config.Bind("Stream", "PauseKey", KeyCode.F10, "Пауза эффектов от зрителей");
+            streamEffects = Config.Bind("Stream", "Effects", false, T("Эффекты от зрителей (Twitch: баллы канала и bits)", "Viewer effects (Twitch: channel points and bits)"));
+            allowPull = Config.Bind("Stream", "AllowFriendStreamerPull", true, T("Разрешить друзьям-стримерам переносить моё яйцо к себе (эффект зрителей)", "Let streamer friends pull my egg to them (a viewer effect)"));
+            streamGap = Config.Bind("Stream", "GapSeconds", 12, T("Не чаще одного эффекта за столько секунд", "At most one effect per this many seconds"));
+            streamPauseKey = Config.Bind("Stream", "PauseKey", KeyCode.F10, T("Пауза эффектов от зрителей", "Pause viewer effects"));
             foreach (var d in Effects)
                 effCfg[d.Id] = new EffectCfg
                 {
-                    On = Config.Bind("Stream." + d.Id, "Enabled", true, d.Name),
-                    Points = Config.Bind("Stream." + d.Id, "ChannelPoints", d.Points, "Цена в баллах канала (0 — не продавать за баллы)"),
-                    Bits = Config.Bind("Stream." + d.Id, "Bits", d.Bits, "Цена в bits (0 — не продавать за bits)"),
-                    Cooldown = Config.Bind("Stream." + d.Id, "CooldownSeconds", d.Cooldown, "Откат эффекта, секунд"),
+                    On = Config.Bind("Stream." + d.Id, "Enabled", true, d.En),
+                    Points = Config.Bind("Stream." + d.Id, "ChannelPoints", d.Points, T("Цена в баллах канала (0 — не продавать за баллы)", "Price in channel points (0: not sold for points)")),
+                    Bits = Config.Bind("Stream." + d.Id, "Bits", d.Bits, T("Цена в bits (0 — не продавать за bits)", "Price in bits (0: not sold for bits)")),
+                    Cooldown = Config.Bind("Stream." + d.Id, "CooldownSeconds", d.Cooldown, T("Откат эффекта, секунд", "Effect cooldown, seconds")),
                 };
             streamQ.Cooldown = id => effCfg.TryGetValue(id, out var c) ? c.Cooldown.Value : 0;
             // The flip turns the picture, not the camera rig: roll just before this camera renders, undo right after.
@@ -75,6 +80,8 @@ namespace EggCoop
         }
 
         static EffectDef Def(string id) => Effects.FirstOrDefault(d => d.Id == id);
+        // A friend's toast carries the effect name in their language.
+        static string EffectName(string name) => Effects.FirstOrDefault(d => d.Ru == name || d.En == name)?.Name ?? name;
         bool Active(string id) => activeUntil.TryGetValue(id, out var t) && Time.unscaledTime < t;
 
         // Called by the Twitch side (or a test button). false = not taken (unknown, switched off): refund it.
@@ -169,8 +176,8 @@ namespace EggCoop
                 }
             }
             if (d.Duration > 0) activeUntil[r.Effect] = Time.unscaledTime + d.Duration;
-            string who = string.IsNullOrEmpty(r.Viewer) ? "Зритель" : r.Viewer;
-            Toast($"{who}: {d.Name}{(d.Duration > 0 ? $" на {d.Duration:0} с" : "")}");
+            string who = string.IsNullOrEmpty(r.Viewer) ? T("Зритель", "Viewer") : r.Viewer;
+            Toast($"{who}: {d.Name}{(d.Duration > 0 ? T($" на {d.Duration:0} с", $" for {d.Duration:0} s") : "")}");
             if (net.Connected) { var w = net.WorldWriter(); w.Put(SEffect); w.Put(d.Name, 48); w.Put(who, 32); net.SendWorld(w, DeliveryMethod.ReliableUnordered); }
             Log.LogInfo($"Stream: ran {r.Effect} for {who} ({r.Source})");
             return true;
@@ -199,11 +206,11 @@ namespace EggCoop
             var at = new Vector3(r.GetFloat(), r.GetFloat(), r.GetFloat());
             string viewer = r.GetString(32);
             if (target != net.MyId) return;
-            if (!allowPull.Value) { Toast($"Зрители {NickOf(from)} хотели перенести вас к нему — выключено в F9"); return; }
+            if (!allowPull.Value) { Toast(T($"Зрители {NickOf(from)} хотели перенести вас к нему — выключено в F9", $"{NickOf(from)}'s viewers wanted to pull you over: turned off in F9")); return; }
             if (!InGame() || World.instance.GetEggCore().freeze) return;
             Place(at + Vector3.up * 1.6f);
             tpSeq++;   // friends snap our copy instead of sweeping it across the level
-            Toast($"Зритель {viewer} перенёс вас к {NickOf(from)}");
+            Toast(T($"Зритель {viewer} перенёс вас к {NickOf(from)}", $"Viewer {viewer} moved you to {NickOf(from)}"));
         }
 
         void DrawConfetti()
@@ -232,22 +239,22 @@ namespace EggCoop
         // F9 → «Стрим»: master switch, pause, gap, and every effect with its prices, cooldown and a test button.
         void DrawStreamSection()
         {
-            GUILayout.Label("ЭФФЕКТЫ ОТ ЗРИТЕЛЕЙ", sHead);
-            streamEffects.Value = EggToggle(streamEffects.Value, "Зрители могут влиять на игру (баллы канала и bits на Twitch)");
+            GUILayout.Label(T("ЭФФЕКТЫ ОТ ЗРИТЕЛЕЙ", "VIEWER EFFECTS"), sHead);
+            streamEffects.Value = EggToggle(streamEffects.Value, T("Зрители могут влиять на игру (баллы канала и bits на Twitch)", "Viewers can affect the game (Twitch channel points and bits)"));
             DrawTwitchRow();
             if (streamEffects.Value)
             {
-                bool p = EggToggle(streamPaused, $"Пауза эффектов ({streamPauseKey.Value})");
+                bool p = EggToggle(streamPaused, T($"Пауза эффектов ({streamPauseKey.Value})", $"Pause effects ({streamPauseKey.Value})"));
                 if (p != streamPaused) SetStreamPaused(p);
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Не чаще одного эффекта раз в, с", sText, GUILayout.Width(250));
+                GUILayout.Label(T("Не чаще одного эффекта раз в, с", "At most one effect every, s"), sText, GUILayout.Width(250));
                 streamGap.Value = IntField(streamGap.Value, 50);
                 GUILayout.EndHorizontal();
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("", sDim, GUILayout.Width(230));
-                GUILayout.Label(new GUIContent("баллы", "Цена в баллах канала. 0 — эффект не продаётся за баллы."), sDim, GUILayout.Width(62));
-                GUILayout.Label(new GUIContent("bits", "Цена в bits. Зритель пишет в сообщении с bits название эффекта. 0 — не продаётся за bits."), sDim, GUILayout.Width(52));
-                GUILayout.Label(new GUIContent("откат", "Сколько секунд эффект нельзя заказать снова после срабатывания."), sDim, GUILayout.Width(46));
+                GUILayout.Label(new GUIContent(T("баллы", "points"), T("Цена в баллах канала. 0 — эффект не продаётся за баллы.", "Price in channel points. 0: the effect is not sold for points.")), sDim, GUILayout.Width(62));
+                GUILayout.Label(new GUIContent("bits", T("Цена в bits. Зритель пишет в сообщении с bits название эффекта. 0 — не продаётся за bits.", "Price in bits. The viewer writes the effect's name in the cheer message. 0: not sold for bits.")), sDim, GUILayout.Width(52));
+                GUILayout.Label(new GUIContent(T("откат", "cd"), T("Сколько секунд эффект нельзя заказать снова после срабатывания.", "How many seconds the effect can't be ordered again after it runs.")), sDim, GUILayout.Width(46));
                 GUILayout.EndHorizontal();
                 string group = null;
                 foreach (var d in Effects)
@@ -262,13 +269,13 @@ namespace EggCoop
                     c.Bits.Value = IntField(c.Bits.Value, 48);
                     c.Cooldown.Value = IntField(c.Cooldown.Value, 42);
                     if (was != (c.On.Value, c.Points.Value, c.Cooldown.Value)) MarkRewardsDirty();   // the channel point reward follows
-                    if (GUILayout.Button("Тест", sBtn, GUILayout.Width(64)) && !RequestEffect(d.Id, cfg.Nick.Value, "test")) Toast("Эффект выключен");
+                    if (GUILayout.Button(T("Тест", "Test"), sBtn, GUILayout.Width(64)) && !RequestEffect(d.Id, cfg.Nick.Value, "test")) Toast(T("Эффект выключен", "The effect is off"));
                     GUILayout.EndHorizontal();
                 }
-                if (streamQ.Count > 0) GUILayout.Label($"В очереди: {string.Join(", ", streamQ.Pending.Select(q => Def(q.Effect).Name))}", sDim);
-                GUILayout.Label("Эффекты ждут, пока яйцо цело и игра не на паузе; не дождавшись за минуту, баллы возвращаются зрителю. Эффекты сами яйцо не разбивают.", sDim);
+                if (streamQ.Count > 0) GUILayout.Label(T($"В очереди: {string.Join(", ", streamQ.Pending.Select(q => Def(q.Effect).Name))}", $"Queued: {string.Join(", ", streamQ.Pending.Select(q => Def(q.Effect).Name))}"), sDim);
+                GUILayout.Label(T("Эффекты ждут, пока яйцо цело и игра не на паузе; не дождавшись за минуту, баллы возвращаются зрителю. Эффекты сами яйцо не разбивают.", "Effects wait until the egg is whole and the game is not paused; after a minute of waiting the points go back to the viewer. Effects never crack the egg themselves."), sDim);
             }
-            allowPull.Value = EggToggle(allowPull.Value, "Друзья-стримеры могут переносить меня к себе (эффект их зрителей)");
+            allowPull.Value = EggToggle(allowPull.Value, T("Друзья-стримеры могут переносить меня к себе (эффект их зрителей)", "Streamer friends can pull me to them (their viewers' effect)"));
         }
 
         // The hovered control's tooltip as a small panel next to the mouse, kept inside the window. Call last in the window.
@@ -293,7 +300,7 @@ namespace EggCoop
         void SetStreamPaused(bool p)
         {
             streamPaused = p;
-            Toast(p ? "Эффекты от зрителей на паузе" : "Эффекты от зрителей снова работают");
+            Toast(p ? T("Эффекты от зрителей на паузе", "Viewer effects paused") : T("Эффекты от зрителей снова работают", "Viewer effects are back on"));
         }
 
         int IntField(int v, float width)

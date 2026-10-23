@@ -12,6 +12,8 @@ using LiteNetLib.Utils;
 using UnityEngine;
 using UnityEngine.Networking;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     public struct EggState
@@ -103,8 +105,8 @@ namespace EggCoop
             IsHost = true;
             port = cfg.Port.Value;
             manager = Create();
-            if (!manager.Start(port)) { Say($"Не удалось открыть порт {port}/UDP (занят?)"); manager = null; return; }
-            Say($"Сервер запущен на порту {port}/UDP. Ищу внешний адрес...");
+            if (!manager.Start(port)) { Say(T($"Не удалось открыть порт {port}/UDP (занят?)", $"Could not open port {port}/UDP (in use?)")); manager = null; return; }
+            Say(T($"Сервер запущен на порту {port}/UDP. Ищу внешний адрес...", $"Server started on port {port}/UDP. Looking up the public address..."));
             byte salt = (byte)UnityEngine.Random.Range(0, 256);
             runner.StartCoroutine(HostSetup(salt));
         }
@@ -123,15 +125,15 @@ namespace EggCoop
             IPEndPoint pub;
             VpnSuspected = mapped != null && upnpIp != null && !mapped.Address.Equals(upnpIp);
             if (VpnSuspected)
-                Say($"Внимание: STUN видит {mapped.Address}, роутер — {upnpIp}. Включён VPN? Друзьям нужен адрес роутера.");
+                Say(T($"Внимание: STUN видит {mapped.Address}, роутер — {upnpIp}. Включён VPN? Друзьям нужен адрес роутера.", $"Warning: STUN sees {mapped.Address}, the router says {upnpIp}. VPN on? Friends need the router's address."));
             // The router's WAN address is where UPnP opened the port, so it wins over what STUN saw.
             if (upnpIp != null && !IsPrivate(upnpIp)) pub = new IPEndPoint(upnpIp, port);
             else if (mapped != null) pub = mapped;
-            else { Say("Внешний адрес не найден. Друзья могут подключиться по IP (LAN / Radmin)."); yield break; }
+            else { Say(T("Внешний адрес не найден. Друзья могут подключиться по IP (LAN / Radmin).", "Public address not found. Friends can join by IP (LAN / Radmin).")); yield break; }
 
-            if (upnpIp != null && IsPrivate(upnpIp)) Say("Роутер за CGNAT провайдера: UPnP не поможет, будет пробивка NAT.");
+            if (upnpIp != null && IsPrivate(upnpIp)) Say(T("Роутер за CGNAT провайдера: UPnP не поможет, будет пробивка NAT.", "The router is behind the ISP's CGNAT: UPnP won't help, NAT punching will be used."));
             Code = InviteCode.Make(pub, salt);
-            Say($"Внешний адрес {pub}. Код приглашения: {Code}");
+            Say(T($"Внешний адрес {pub}. Код приглашения: {Code}", $"Public address {pub}. Invite code: {Code}"));
             runner.StartCoroutine(PollSignals(InviteCode.Topic(Code)));
         }
 
@@ -146,13 +148,13 @@ namespace EggCoop
                 bool ok = found.WaitOne(5000);
                 Mono.Nat.NatUtility.StopDiscovery();
                 Mono.Nat.NatUtility.DeviceFound -= onFound;
-                if (!ok) { Say("UPnP: роутер не ответил"); return null; }
+                if (!ok) { Say(T("UPnP: роутер не ответил", "UPnP: the router did not answer")); return null; }
                 upnpDevice.CreatePortMapAsync(new Mono.Nat.Mapping(Mono.Nat.Protocol.Udp, p, p, 0, "EggCoop")).GetAwaiter().GetResult();
                 var ip = upnpDevice.GetExternalIPAsync().GetAwaiter().GetResult();
-                Say($"UPnP: порт {p}/UDP открыт на роутере ({ip})");
+                Say(T($"UPnP: порт {p}/UDP открыт на роутере ({ip})", $"UPnP: port {p}/UDP opened on the router ({ip})"));
                 return ip;
             }
-            catch (Exception e) { Say("UPnP не сработал: " + e.Message); return null; }
+            catch (Exception e) { Say(T("UPnP не сработал: ", "UPnP failed: ") + e.Message); return null; }
         }
 
         // Host side of hole punching: guests post their public endpoint to an ntfy topic derived from the code.
@@ -173,7 +175,7 @@ namespace EggCoop
                             if (time != null && long.TryParse(time, out var t)) since = Math.Max(since, t + 1);
                             if (msg != null && msg.StartsWith("p ") && TryParseEndPoint(msg.Substring(2), port, out var ep))
                             {
-                                Say($"Пробиваю NAT к {ep}");
+                                Say(T($"Пробиваю NAT к {ep}", $"Punching NAT to {ep}"));
                                 punchTargets.Add((ep, Time.unscaledTime + 6f));
                             }
                         }
@@ -193,14 +195,14 @@ namespace EggCoop
             {
                 manager = Create();
                 manager.Start();
-                Say($"Подключаюсь напрямую к {direct}...");
+                Say(T($"Подключаюсь напрямую к {direct}...", $"Connecting directly to {direct}..."));
                 manager.Connect(direct, ConnectKey);
                 return;
             }
-            if (!InviteCode.TryParse(target, out var hostEp, out _)) { Say("Это не код приглашения и не IP:порт"); return; }
+            if (!InviteCode.TryParse(target, out var hostEp, out _)) { Say(T("Это не код приглашения и не IP:порт", "This is neither an invite code nor IP:port")); return; }
             manager = Create();
             manager.Start();
-            Say($"Подключаюсь к {hostEp} по коду...");
+            Say(T($"Подключаюсь к {hostEp} по коду...", $"Connecting to {hostEp} by code..."));
             manager.SendBroadcast(Discover, hostEp.Port);    // same LAN as the host? it will answer EGGHERE
             manager.Connect(hostEp, ConnectKey);
             runner.StartCoroutine(GuestPunch(InviteCode.Topic(target), hostEp));
@@ -211,14 +213,14 @@ namespace EggCoop
             IPEndPoint mapped = null;
             yield return StunQuery(r => mapped = r);
             if (manager == null || hostPeer != null) yield break;
-            if (mapped == null) { Say("STUN не ответил, пробую без пробивки NAT"); yield break; }
+            if (mapped == null) { Say(T("STUN не ответил, пробую без пробивки NAT", "STUN did not answer, trying without NAT punching")); yield break; }
             using (var req = new UnityWebRequest($"{cfg.SignalUrl.Value}/{topic}", "POST"))
             {
                 req.uploadHandler = new UploadHandlerRaw(Encoding.ASCII.GetBytes("p " + mapped));
                 req.downloadHandler = new DownloadHandlerBuffer();
                 req.timeout = 10;
                 yield return req.SendWebRequest();
-                Say(req.result == UnityWebRequest.Result.Success ? $"Мой внешний адрес {mapped} отправлен хосту" : "Сигнальный сервер недоступен: " + req.error);
+                Say(req.result == UnityWebRequest.Result.Success ? T($"Мой внешний адрес {mapped} отправлен хосту", $"Sent my public address {mapped} to the host") : T("Сигнальный сервер недоступен: ", "Signal server unreachable: ") + req.error);
             }
             punchTargets.Add((hostEp, Time.unscaledTime + 6f));
         }
@@ -250,7 +252,7 @@ namespace EggCoop
             float now = Time.unscaledTime;
             if (reconnectUntil > 0 && hostPeer == null)
             {
-                if (now > reconnectUntil) { reconnectUntil = 0; Stop(); OnEnded?.Invoke("Не удалось вернуться к хосту за 30 с — сессия завершена"); return; }
+                if (now > reconnectUntil) { reconnectUntil = 0; Stop(); OnEnded?.Invoke(T("Не удалось вернуться к хосту за 30 с — сессия завершена", "Could not get back to the host in 30 s: session ended")); return; }
                 if (now >= nextReconnect && manager.GetPeersCount(ConnectionState.Outgoing) == 0)
                 {
                     nextReconnect = now + 3f;
@@ -334,23 +336,23 @@ namespace EggCoop
             remoteIds.Clear();
             var dev = upnpDevice; upnpDevice = null;
             if (dev != null) ThreadPool.QueueUserWorkItem(_ => { try { dev.DeletePortMapAsync(new Mono.Nat.Mapping(Mono.Nat.Protocol.Udp, port, port)).GetAwaiter().GetResult(); } catch { } });
-            Say("Отключено");
+            Say(T("Отключено", "Disconnected"));
         }
 
         // ---------------------------------------------------------------- LiteNetLib events
 
         public void OnConnectionRequest(ConnectionRequest request)
         {
-            Say($"Запрос на вход от {request.RemoteEndPoint}");
+            Say(T($"Запрос на вход от {request.RemoteEndPoint}", $"Join request from {request.RemoteEndPoint}"));
             if (!IsHost || manager.ConnectedPeersCount >= MaxPlayers - 1) { request.Reject(); return; }
-            if (request.AcceptIfKey(ConnectKey) == null) Say($"Отклонён {request.RemoteEndPoint}: другая версия мода");
+            if (request.AcceptIfKey(ConnectKey) == null) Say(T($"Отклонён {request.RemoteEndPoint}: другая версия мода", $"Rejected {request.RemoteEndPoint}: another mod version"));
         }
 
         public void OnPeerConnected(NetPeer peer)
         {
             if (IsHost)
             {
-                Say($"Игрок подключился: {peer}");
+                Say(T($"Игрок подключился: {peer}", $"Player joined: {peer}"));
                 var w = new NetDataWriter(); w.Put(MsgWelcome); w.Put((byte)(peer.Id + 1)); w.Put(Application.version);
                 peer.Send(w, DeliveryMethod.ReliableOrdered);
                 peer.Send(SettingsPacket(), DeliveryMethod.ReliableOrdered);
@@ -359,8 +361,8 @@ namespace EggCoop
             if (hostPeer != null) { peer.Disconnect(); return; }   // LAN + public route both succeeded: keep the first
             hostPeer = peer;
             lastHost = new IPEndPoint(peer.Address, peer.Port);
-            Say(reconnectUntil > 0 ? $"Снова на связи с хостом {peer}" : $"Подключено к хосту {peer}");
-            if (reconnectUntil > 0) OnEnded?.Invoke("Снова на связи с хостом");   // just a toast: the session goes on
+            Say(reconnectUntil > 0 ? T($"Снова на связи с хостом {peer}", $"Back in touch with the host {peer}") : T($"Подключено к хосту {peer}", $"Connected to the host {peer}"));
+            if (reconnectUntil > 0) OnEnded?.Invoke(T("Снова на связи с хостом", "Back in touch with the host"));   // just a toast: the session goes on
             reconnectUntil = 0;
         }
 
@@ -369,15 +371,15 @@ namespace EggCoop
             if (IsHost)
             {
                 int id = peer.Id + 1;
-                Say($"Игрок отключился ({info.Reason})");
+                Say(T($"Игрок отключился ({info.Reason})", $"Player left ({info.Reason})"));
                 OnLeave?.Invoke(id);
                 writer.Reset(); writer.Put(MsgLeave); writer.Put((byte)id);
                 manager.SendToAll(writer, DeliveryMethod.ReliableOrdered);
             }
             else if (peer == hostPeer && info.Reason != DisconnectReason.RemoteConnectionClose && info.Reason != DisconnectReason.DisconnectPeerCalled)
             {
-                Say($"Связь с хостом потеряна ({info.Reason}) — переподключаюсь...");
-                OnEnded?.Invoke("Связь с хостом потеряна — переподключаюсь...");
+                Say(T($"Связь с хостом потеряна ({info.Reason}) — переподключаюсь...", $"Lost the host ({info.Reason}): reconnecting..."));
+                OnEnded?.Invoke(T("Связь с хостом потеряна — переподключаюсь...", "Lost the host: reconnecting..."));
                 hostPeer = null;
                 myId = 0;
                 foreach (var id in remoteIds) OnLeave?.Invoke(id);
@@ -388,7 +390,7 @@ namespace EggCoop
             else if (reconnectUntil > 0 && hostPeer == null) { }   // one failed attempt while reconnecting: Poll tries again
             else if (peer == hostPeer || hostPeer == null)
             {
-                string why = hostPeer == null ? $"Не удалось подключиться ({info.Reason})" : $"Хост вышел или пропал ({info.Reason}) — сессия завершена";
+                string why = hostPeer == null ? T($"Не удалось подключиться ({info.Reason})", $"Could not connect ({info.Reason})") : T($"Хост вышел или пропал ({info.Reason}) — сессия завершена", $"The host left or vanished ({info.Reason}): session ended");
                 Say(why);
                 hostPeer = null;
                 foreach (var id in remoteIds) OnLeave?.Invoke(id);
@@ -409,7 +411,7 @@ namespace EggCoop
             {
                 myId = id;
                 string hostGame = r.AvailableBytes > 0 ? r.GetString() : null;   // 0.4.0-0.4.2 hosts do not send it
-                if (hostGame != null && hostGame != Application.version) { Say($"Версия игры у хоста {hostGame}, у вас {Application.version}"); OnEnded?.Invoke($"Разные версии игры: у хоста {hostGame}, у вас {Application.version}. Предметы могут не совпадать"); }
+                if (hostGame != null && hostGame != Application.version) { Say(T($"Версия игры у хоста {hostGame}, у вас {Application.version}", $"Host game version {hostGame}, yours {Application.version}")); OnEnded?.Invoke(T($"Разные версии игры: у хоста {hostGame}, у вас {Application.version}. Предметы могут не совпадать", $"Different game versions: host {hostGame}, yours {Application.version}. Objects may not match")); }
                 r.Recycle(); return;
             }
             if (type == MsgClock && !IsHost) { SharedClock.Sample(r.GetFloat() + peer.Ping / 1000f); r.Recycle(); return; }
@@ -449,10 +451,10 @@ namespace EggCoop
             byte[] data = r.GetRemainingBytes();
             r.Recycle();
             if (IsHost && data.SequenceEqual(Discover)) manager.SendUnconnectedMessage(Here, ep);
-            else if (!IsHost && hostPeer == null && data.SequenceEqual(Here)) { Say($"Хост найден в локальной сети: {ep}"); manager.Connect(ep, ConnectKey); }
+            else if (!IsHost && hostPeer == null && data.SequenceEqual(Here)) { Say(T($"Хост найден в локальной сети: {ep}", $"Host found on the local network: {ep}")); manager.Connect(ep, ConnectKey); }
         }
 
-        public void OnNetworkError(IPEndPoint ep, SocketError e) => Say($"Ошибка сети {ep}: {e}");
+        public void OnNetworkError(IPEndPoint ep, SocketError e) => Say(T($"Ошибка сети {ep}: {e}", $"Network error {ep}: {e}"));
         public void OnNetworkLatencyUpdate(NetPeer peer, int latency) => Ping[IsHost ? peer.Id + 1 : 0] = latency;
 
         // ---------------------------------------------------------------- helpers

@@ -3,6 +3,8 @@ using System.Linq;
 using LiteNetLib;
 using UnityEngine;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Emotes over the eggs, ping markers and the shame board. Hold the emote key (G): a wheel opens, hover a slice
@@ -13,7 +15,7 @@ namespace EggCoop
         const float EmoteTime = 3.5f, PingTime = 12f, BigFall = 15f, EmoteSize = 56f;
         // Twemoji 15.1 (CC-BY 4.0), embedded as emote.<codepoint>.
         static readonly string[] EmoteIcons = { "1f44b", "1f44d", "1f602", "1f631", "1f621", "1f64f", "1f480", null };   // the last slot is the ping: drawn as its triangle
-        static readonly string[] EmoteNames = { "Привет", "Класс!", "Ха-ха", "Ааа!", "Злюсь", "Помогите!", "RIP", "Метка" };
+        static string[] EmoteNames => Lang.En ? new[] { "Hi", "Nice!", "Haha", "Aaah!", "Angry", "Help!", "RIP", "Ping" } : new[] { "Привет", "Класс!", "Ха-ха", "Ааа!", "Злюсь", "Помогите!", "RIP", "Метка" };
         const int PingIndex = 7;
 
         Texture2D[] emoteTex;
@@ -31,7 +33,7 @@ namespace EggCoop
         Shame MyShame => shame.TryGetValue(cfg.Nick.Value, out var s) ? s : shame[cfg.Nick.Value] = new Shame();
         void SaveShame() => cfg.ShameStats.Value = Shame.Format(shame);
 
-        public static string NickOf(int id) => instance != null && instance.ghosts.TryGetValue(id, out var g) ? g.Nick : id == 0 ? "Хост" : "Друг";
+        public static string NickOf(int id) => instance != null && instance.ghosts.TryGetValue(id, out var g) ? g.Nick : id == 0 ? T("Хост", "Host") : T("Друг", "Friend");
 
         // ---------------------------------------------------------------- frame
 
@@ -65,7 +67,7 @@ namespace EggCoop
             MyShame.AddFall(drop);
             SaveShame();
             if (drop < BigFall) return;
-            Toast($"Вы пролетели вниз {drop:0} м");
+            Toast(T($"Вы пролетели вниз {drop:0} м", $"You fell {drop:0} m"));
             if (!net.Connected) return;
             var w = net.WorldWriter(); w.Put(SFall); w.Put(drop);
             net.SendWorld(w, DeliveryMethod.ReliableUnordered);
@@ -142,14 +144,14 @@ namespace EggCoop
                     break;
                 case SEffect:
                     string effect = r.GetString(48), viewer = r.GetString(32);
-                    Toast($"{viewer} → {NickOf(from)}: {effect}");
+                    Toast($"{viewer} → {NickOf(from)}: {EffectName(effect)}");
                     break;
                 case SPull:
                     ReceivePull(from, r);
                     break;
                 case SPing:
                     pings[from] = (new Vector3(r.GetFloat(), r.GetFloat(), r.GetFloat()), Time.unscaledTime);
-                    Toast($"{NickOf(from)} поставил метку");
+                    Toast(T($"{NickOf(from)} поставил метку", $"{NickOf(from)} pinged"));
                     break;
                 case SStats:
                 {
@@ -161,12 +163,12 @@ namespace EggCoop
                     break;
                 }
                 case SFall:
-                    Toast($"{NickOf(from)} пролетел вниз {r.GetFloat():0} м");
+                    Toast(T($"{NickOf(from)} пролетел вниз {r.GetFloat():0} м", $"{NickOf(from)} fell {r.GetFloat():0} m"));
                     break;
                 case SReset:
                     if (from != 0) break;   // the host's call
                     shame.Clear(); SaveShame();
-                    Toast("Хост обнулил доску позора");
+                    Toast(T("Хост обнулил доску позора", "The host reset the shame board"));
                     break;
             }
         }
@@ -255,8 +257,8 @@ namespace EggCoop
                 if (i == PingIndex) { GUI.color = Color.Lerp(Color.white, PlayerColor(-1), 0.75f); GUI.DrawTexture(new Rect(p.x - s * 0.4f, p.y - s * 0.4f, s * 0.8f, s * 0.8f), triTex); GUI.color = Color.white; }
                 else if (emoteTex[i] != null) GUI.DrawTexture(new Rect(p.x - s / 2, p.y - s / 2, s, s), emoteTex[i], ScaleMode.ScaleToFit);
             }
-            GUI.Label(new Rect(c.x - 250, c.y + R + 6, 500, 30), wheelHover >= 0 ? EmoteNames[wheelHover] : "Закрыть", sCap);
-            GUI.Label(new Rect(c.x - 250, c.y + R + 36, 500, 22), $"наведите и отпустите {cfg.EmoteKey.Value} · × или Esc — закрыть", sHint);
+            GUI.Label(new Rect(c.x - 250, c.y + R + 6, 500, 30), wheelHover >= 0 ? EmoteNames[wheelHover] : T("Закрыть", "Close"), sCap);
+            GUI.Label(new Rect(c.x - 250, c.y + R + 36, 500, 22), T($"наведите и отпустите {cfg.EmoteKey.Value} · × или Esc — закрыть", $"hover and release {cfg.EmoteKey.Value} · × or Esc to close"), sHint);
             if (e.type == EventType.MouseDown && e.button == 0) { if (wheelHover >= 0) FireEmote(wheelHover); else CloseWheel(); e.Use(); }
         }
 
@@ -336,7 +338,7 @@ namespace EggCoop
             GUI.color = Color.white;
             if (aiming)
             {
-                const string hint = "<color=#FFA727>МЕТКА</color>   кликните, куда её поставить · Esc или правая кнопка — отмена";
+                string hint = T("<color=#FFA727>МЕТКА</color>   кликните, куда её поставить · Esc или правая кнопка — отмена", "<color=#FFA727>PING</color>   click where to put it · Esc or right button to cancel");
                 var size = sPanel.CalcSize(new GUIContent(hint));
                 GUI.Box(new Rect((Screen.width - size.x) / 2, Screen.height * 0.8f, size.x, size.y), hint, sPanel);
             }
@@ -372,7 +374,7 @@ namespace EggCoop
             GUI.color = new Color(0, 0, 0, alpha * 0.45f); GUI.DrawTexture(new Rect(tri.x + 2, tri.y + 3, w, w), triTex);
             GUI.color = new Color(col.r, col.g, col.b, alpha); GUI.DrawTexture(tri, triTex);
             GUI.matrix = m;
-            string label = $"{(who < 0 ? cfg.Nick.Value : NickOf(who))} · {Vector3.Distance(me, at):0} м";
+            string label = T($"{(who < 0 ? cfg.Nick.Value : NickOf(who))} · {Vector3.Distance(me, at):0} м", $"{(who < 0 ? cfg.Nick.Value : NickOf(who))} · {Vector3.Distance(me, at):0} m");
             var r = off ? new Rect(Mathf.Clamp(x - 120, 4, Screen.width - 244), Mathf.Clamp(y + 18, 4, Screen.height - 26), 240, 22)
                         : new Rect(x - 120, y - w - bob - 24, 240, 22);
             GUI.color = new Color(0, 0, 0, alpha * 0.8f); GUI.Label(new Rect(r.x + 1, r.y + 1, r.width, r.height), label, tag);
@@ -387,20 +389,20 @@ namespace EggCoop
             foreach (var kv in shame.OrderByDescending(kv => kv.Value.Lost).ThenByDescending(kv => kv.Value.Cracks))
             {
                 var s = kv.Value;
-                string who = kv.Key == cfg.Nick.Value ? $"{kv.Key} (вы)" : kv.Key;
-                lines.Add($"{(++rank == 1 ? "<color=#FFA727>" : "")}{rank}. {who}{(rank == 1 ? "</color>" : "")}   <size=13><color=#BFBFBF>потерял {s.Lost:0} м · падений {s.Falls} · худшее {s.MaxFall:0} м · разбился {s.Cracks}</color></size>");
+                string who = kv.Key == cfg.Nick.Value ? T($"{kv.Key} (вы)", $"{kv.Key} (you)") : kv.Key;
+                lines.Add($"{(++rank == 1 ? "<color=#FFA727>" : "")}{rank}. {who}{(rank == 1 ? "</color>" : "")}   <size=13><color=#BFBFBF>" + T($"потерял {s.Lost:0} м · падений {s.Falls} · худшее {s.MaxFall:0} м · разбился {s.Cracks}", $"lost {s.Lost:0} m · falls {s.Falls} · worst {s.MaxFall:0} m · cracks {s.Cracks}") + "</color></size>");
             }
             return lines;
         }
 
         void DrawShameBoard()
         {
-            GUILayout.Label("ДОСКА ПОЗОРА", sHead);
+            GUILayout.Label(T("ДОСКА ПОЗОРА", "SHAME BOARD"), sHead);
             var lines = ShameLines();
-            if (lines.Count == 0) GUILayout.Label("Пока никто не падал. Пока.", sDim);
+            if (lines.Count == 0) GUILayout.Label(T("Пока никто не падал. Пока.", "Nobody has fallen yet. Yet."), sDim);
             foreach (var l in lines) GUILayout.Label(l, sText);
-            GUILayout.Label($"Падение — когда яйцо остановилось на {FallTracker.MinDrop:0}+ м ниже, чем было. От {BigFall:0} м об этом узнают все.", sDim);
-            if ((!net.Active || net.IsHost) && lines.Count > 0 && GUILayout.Button(net.Active ? "Обнулить доску позора у всех" : "Обнулить доску позора", sBtn)) ResetShame();
+            GUILayout.Label(T($"Падение — когда яйцо остановилось на {FallTracker.MinDrop:0}+ м ниже, чем было. От {BigFall:0} м об этом узнают все.", $"A fall is when the egg comes to rest {FallTracker.MinDrop:0}+ m lower than it was. From {BigFall:0} m everyone hears about it."), sDim);
+            if ((!net.Active || net.IsHost) && lines.Count > 0 && GUILayout.Button(net.Active ? T("Обнулить доску позора у всех", "Reset the shame board for everyone") : T("Обнулить доску позора", "Reset the shame board"), sBtn)) ResetShame();
         }
 
         void UpdateCursor()

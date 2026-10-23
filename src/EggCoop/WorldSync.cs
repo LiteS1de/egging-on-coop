@@ -5,6 +5,8 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using UnityEngine;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Host's game clock as seen by this client. Moving platforms (KinematicCurveMovement) run on Time.time, which
@@ -342,7 +344,7 @@ namespace EggCoop
                     for (int n = r.GetUShort(); n > 0; n--) Break(r.GetInt());
                     Plugin.Log.LogInfo($"World sync: host world applied, {missing} of {total} host objects not found here");
                     // Objects are matched by their place in the scene: many misses mean a different build of the game.
-                    if (missing > total / 10) Plugin.Notify($"{missing} из {total} предметов хоста не нашлись у вас: похоже, у вас разные версии игры");
+                    if (missing > total / 10) Plugin.Notify(T($"{missing} из {total} предметов хоста не нашлись у вас: похоже, у вас разные версии игры", $"{missing} of {total} host objects are missing here: you probably have different game versions"));
                     break;
                 }
                 case WBroken:

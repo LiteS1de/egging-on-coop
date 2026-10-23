@@ -11,6 +11,8 @@ using BepInEx.Configuration;
 using UnityEngine;
 using UnityEngine.Networking;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Twitch for viewer effects, no extra programs:
@@ -58,7 +60,7 @@ namespace EggCoop
 
         void InitTwitch()
         {
-            twitchClientId = Config.Bind("Stream", "TwitchClientId", "", "Свой Client ID приложения Twitch (пусто — встроенный)");
+            twitchClientId = Config.Bind("Stream", "TwitchClientId", "", T("Свой Client ID приложения Twitch (пусто — встроенный)", "Your own Twitch app Client ID (empty: the built-in one)"));
             OnEffectDone += TwitchEffectDone;
             Application.quitting += PauseRewardsNow;
             try
@@ -116,11 +118,11 @@ namespace EggCoop
 
         IEnumerator TwitchLogin()
         {
-            twState = "code"; twStatus = "Запрашиваю код у Twitch…";
+            twState = "code"; twStatus = T("Запрашиваю код у Twitch…", "Asking Twitch for a code…");
             TDevice dev = null;
             yield return Http("POST", "https://id.twitch.tv/oauth2/device", Form("client_id", TwitchClientId, "scopes", TwitchScopes), false,
                 (c, t) => { if (c == 200) dev = JsonUtility.FromJson<TDevice>(t); });
-            if (dev == null || string.IsNullOrEmpty(dev.device_code)) { twState = "error"; twStatus = "Twitch не выдал код входа (нет интернета?)"; yield break; }
+            if (dev == null || string.IsNullOrEmpty(dev.device_code)) { twState = "error"; twStatus = T("Twitch не выдал код входа (нет интернета?)", "Twitch gave no sign-in code (no internet?)"); yield break; }
             twDevice = dev;
             twDeviceUntil = Time.unscaledTime + dev.expires_in;
             GUIUtility.systemCopyBuffer = dev.user_code;
@@ -140,9 +142,9 @@ namespace EggCoop
                     yield return TwitchStart();
                     yield break;
                 }
-                if (tok?.message != null && tok.message != "authorization_pending") { twDevice = null; twState = "error"; twStatus = "Вход отменён: " + tok.message; yield break; }
+                if (tok?.message != null && tok.message != "authorization_pending") { twDevice = null; twState = "error"; twStatus = T("Вход отменён: ", "Sign-in cancelled: ") + tok.message; yield break; }
             }
-            if (twDevice == dev) { twDevice = null; twState = "error"; twStatus = "Код устарел — нажмите «Подключить Twitch» ещё раз"; }
+            if (twDevice == dev) { twDevice = null; twState = "error"; twStatus = T("Код устарел — нажмите «Подключить Twitch» ещё раз", "The code expired: click \"Connect Twitch\" again"); }
         }
 
         IEnumerator RefreshToken(Action<bool> done)
@@ -152,13 +154,13 @@ namespace EggCoop
                 (c, t) => { code = c; tok = JsonUtility.FromJson<TToken>(t); });
             bool ok = code == 200 && tok != null && !string.IsNullOrEmpty(tok.access_token);
             if (ok) { twAccess = tok.access_token; twRefresh = tok.refresh_token; SaveToken(); }   // refresh tokens are single-use
-            else { twState = "error"; twStatus = "Вход в Twitch истёк — подключите заново"; twRefresh = null; SaveToken(); StopTwitch(false); }
+            else { twState = "error"; twStatus = T("Вход в Twitch истёк — подключите заново", "Twitch sign-in expired: connect again"); twRefresh = null; SaveToken(); StopTwitch(false); }
             done(ok);
         }
 
         IEnumerator TwitchResume()
         {
-            twState = "connecting"; twStatus = "Подключаюсь к Twitch…";
+            twState = "connecting"; twStatus = T("Подключаюсь к Twitch…", "Connecting to Twitch…");
             bool ok = false;
             yield return RefreshToken(r => ok = r);
             if (ok) yield return TwitchStart();
@@ -166,10 +168,10 @@ namespace EggCoop
 
         IEnumerator TwitchStart()
         {
-            twState = "connecting"; twStatus = "Проверяю аккаунт…";
+            twState = "connecting"; twStatus = T("Проверяю аккаунт…", "Checking the account…");
             TValidate v = null;
             yield return ValidateToken(r => v = r);
-            if (v == null || string.IsNullOrEmpty(v.user_id)) { twState = "error"; twStatus = "Twitch не принял вход"; yield break; }
+            if (v == null || string.IsNullOrEmpty(v.user_id)) { twState = "error"; twStatus = T("Twitch не принял вход", "Twitch rejected the sign-in"); yield break; }
             twUserId = v.user_id; twLogin = v.login;
             object us = null;
             yield return Http("GET", "https://api.twitch.tv/helix/users?id=" + twUserId, null, true, (c, t) => { if (c == 200) us = Json.Parse(t); });
@@ -230,7 +232,7 @@ namespace EggCoop
             object have = null;
             yield return Http("GET", $"https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id={twUserId}&only_manageable_rewards=true", null, true,
                 (c, t) => { if (c == 200) have = Json.Parse(t); });
-            if (have == null) { twStatus = "Не удалось прочитать награды канала"; yield break; }
+            if (have == null) { twStatus = T("Не удалось прочитать награды канала", "Could not read the channel rewards"); yield break; }
             var ours = Json.List(have, "data");
             rewardEffect.Clear(); effectReward.Clear();
             bool live = streamEffects.Value && !streamPaused;
@@ -239,16 +241,16 @@ namespace EggCoop
             {
                 var c = effCfg[d.Id];
                 bool want = streamEffects.Value && c.On.Value && c.Points.Value > 0;
-                var r = ours.FirstOrDefault(x => Json.Str(x, "title") == d.Name);
+                var r = ours.FirstOrDefault(x => Json.Str(x, "title") == d.Ru || Json.Str(x, "title") == d.En);
                 int cd = c.Cooldown.Value;
-                string fields = $"\"cost\":{Math.Max(1, c.Points.Value)},\"prompt\":{J(d.Desc)},\"is_enabled\":{(want ? "true" : "false")},\"is_paused\":{(live ? "false" : "true")}," +
+                string fields = $"\"title\":{J(d.Name)},\"cost\":{Math.Max(1, c.Points.Value)},\"prompt\":{J(d.Desc)},\"is_enabled\":{(want ? "true" : "false")},\"is_paused\":{(live ? "false" : "true")}," +
                                 $"\"is_global_cooldown_enabled\":{(cd > 0 ? "true" : "false")},\"global_cooldown_seconds\":{Math.Max(1, cd)}";
                 if (r == null && !want) continue;
                 string id = Json.Str(r, "id");
                 if (r == null)
                 {
                     yield return Http("POST", $"https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id={twUserId}",
-                        "{\"title\":" + J(d.Name) + ",\"background_color\":\"#FFA727\"," + fields + "}", true,
+                        "{\"background_color\":\"#FFA727\"," + fields + "}", true,
                         (code, t) => { if (code == 200) { id = Json.Str(Json.Parse(t), "data", 0, "id"); made++; } else failed++; });
                 }
                 else
@@ -259,7 +261,7 @@ namespace EggCoop
                 if (id != null) { rewardEffect[id] = d.Id; effectReward[d.Id] = id; }
             }
             rewardsPausedOnTwitch = !live;
-            twStatus = failed > 0 ? $"Награды: {failed} не удалось обновить (журнал BepInEx)" : $"Награды на канале: {effectReward.Count}" + (made > 0 ? $" (новых {made})" : "") + (live ? "" : ", на паузе");
+            twStatus = failed > 0 ? T($"Награды: {failed} не удалось обновить (журнал BepInEx)", $"Rewards: {failed} failed to update (BepInEx log)") : T($"Награды на канале: {effectReward.Count}", $"Channel rewards: {effectReward.Count}") + (made > 0 ? T($" (новых {made})", $" ({made} new)") : "") + (live ? "" : T(", на паузе", ", paused"));
             Log.LogInfo("Twitch: " + twStatus);
         }
 
@@ -306,7 +308,7 @@ namespace EggCoop
                 if (twAccess == null) Log.LogInfo($"Twitch: would mark redemption {ids[1]} {(ran ? "FULFILLED" : "CANCELED")} (not signed in)");
                 else StartCoroutine(SetRedemption(ids[0], ids[1], ran));
             }
-            else if (r.Source == "bits" && !ran) Toast($"{r.Viewer}: «{Def(r.Effect).Name}» не удалось запустить (bits не возвращаются)");
+            else if (r.Source == "bits" && !ran) Toast(T($"{r.Viewer}: «{Def(r.Effect).Name}» не удалось запустить (bits не возвращаются)", $"{r.Viewer}: \"{Def(r.Effect).Name}\" could not run (bits are not refunded)"));
         }
 
         // ---------------------------------------------------------------- EventSub
@@ -316,7 +318,7 @@ namespace EggCoop
             var stop = new CancellationTokenSource();
             var old = wsStop;
             wsStop = stop;
-            twState = "connecting"; twStatus = "Подключаюсь к событиям Twitch…";
+            twState = "connecting"; twStatus = T("Подключаюсь к событиям Twitch…", "Connecting to Twitch events…");
             Task.Run(() => WsLoop(url, stop.Token, old));
         }
 
@@ -361,7 +363,7 @@ namespace EggCoop
             if (twAccess == null) return;
             // Keepalives come every ~10 s; silence for long means a dead socket: start again.
             if (wsSession != null && now - wsLastMessage > 40f) { Log.LogInfo("Twitch: events silent, reconnecting"); wsSession = null; StartWs("wss://eventsub.wss.twitch.tv/ws"); }
-            if (twState == "online" && now > nextValidate) StartCoroutine(ValidateToken(v => { if (v == null) twStatus = "Вход в Twitch надо обновить"; }));
+            if (twState == "online" && now > nextValidate) StartCoroutine(ValidateToken(v => { if (v == null) twStatus = T("Вход в Twitch надо обновить", "Twitch sign-in needs a refresh"); }));
             // Rewards follow F9: price edits settle for 3 s, pause/unpause right away.
             bool live = streamEffects.Value && !streamPaused;
             if (twType?.Length > 0 && twState == "online" && (live == rewardsPausedOnTwitch || (rewardsDirtyAt > 0 && now - rewardsDirtyAt > 3f)))
@@ -395,14 +397,14 @@ namespace EggCoop
                     OnTwitchEvent(Json.Str(m, "metadata", "subscription_type") ?? Json.Str(m, "payload", "subscription", "type"), Json.Get(m, "payload", "event"));
                     break;
                 case "revocation":
-                    twStatus = "Twitch отозвал подписку: " + Json.Str(m, "payload", "subscription", "status");
+                    twStatus = T("Twitch отозвал подписку: ", "Twitch revoked the subscription: ") + Json.Str(m, "payload", "subscription", "status");
                     break;
                 case "x_error":
                     Log.LogWarning("Twitch events: " + Json.Str(m, "metadata", "message_id"));
                     goto case "x_closed";
                 case "x_closed":
                     wsSession = null;
-                    if (twAccess != null) { twState = "connecting"; twStatus = "Связь с Twitch прервалась — переподключаюсь…"; StartCoroutine(ReconnectLater()); }
+                    if (twAccess != null) { twState = "connecting"; twStatus = T("Связь с Twitch прервалась — переподключаюсь…", "Lost Twitch: reconnecting…"); StartCoroutine(ReconnectLater()); }
                     break;
             }
         }
@@ -425,15 +427,15 @@ namespace EggCoop
                 yield return Http("POST", "https://api.twitch.tv/helix/eventsub/subscriptions", body, true, (c, x) => { if (c == 202) ok++; });
             }
             twState = ok == want ? "online" : "error";
-            twStatus = ok == want ? $"Twitch: {twLogin} · события подключены" + (twType.Length == 0 ? " · баллов канала нет (нужен статус компаньона)" : "")
-                                  : $"Twitch: подписка на события не удалась ({ok}/{want}), см. журнал BepInEx";
+            twStatus = ok == want ? T($"Twitch: {twLogin} · события подключены", $"Twitch: {twLogin} · events connected") + (twType.Length == 0 ? T(" · баллов канала нет (нужен статус компаньона)", " · no channel points (needs Affiliate status)") : "")
+                                  : T($"Twitch: подписка на события не удалась ({ok}/{want}), см. журнал BepInEx", $"Twitch: event subscription failed ({ok}/{want}), see the BepInEx log");
             Log.LogInfo(twStatus);
         }
 
         void OnTwitchEvent(string type, object e)
         {
             if (e == null) return;
-            string viewer = Json.Bool(e, "is_anonymous") ? "Аноним" : Json.Str(e, "user_name") ?? Json.Str(e, "user_login") ?? "Зритель";
+            string viewer = Json.Bool(e, "is_anonymous") ? T("Аноним", "Anonymous") : Json.Str(e, "user_name") ?? Json.Str(e, "user_login") ?? T("Зритель", "Viewer");
             if (type == "channel.channel_points_custom_reward_redemption.add")
             {
                 string rewardId = Json.Str(e, "reward", "id"), redemptionId = Json.Str(e, "id");
@@ -454,7 +456,7 @@ namespace EggCoop
         {
             string msg = (message ?? "").ToLowerInvariant();
             return Effects.Where(d => effCfg[d.Id].On.Value && effCfg[d.Id].Bits.Value > 0 && bits >= effCfg[d.Id].Bits.Value
-                                      && (msg.Contains(d.Name.ToLowerInvariant()) || CheerWords[d.Id].Any(w => msg.Contains(w))))
+                                      && (msg.Contains(d.Ru.ToLowerInvariant()) || msg.Contains(d.En.ToLowerInvariant()) || CheerWords[d.Id].Any(w => msg.Contains(w))))
                           .OrderByDescending(d => effCfg[d.Id].Bits.Value).Select(d => d.Id).FirstOrDefault();
         }
 
@@ -467,22 +469,22 @@ namespace EggCoop
             {
                 case "off":
                 case "error":
-                    GUILayout.Label(twState == "error" ? twStatus : "Twitch не подключён", twState == "error" ? sText : sDim);
-                    if (GUILayout.Button("Подключить Twitch", sBtn, GUILayout.Width(180))) TwitchConnect();
+                    GUILayout.Label(twState == "error" ? twStatus : T("Twitch не подключён", "Twitch not connected"), twState == "error" ? sText : sDim);
+                    if (GUILayout.Button(T("Подключить Twitch", "Connect Twitch"), sBtn, GUILayout.Width(180))) TwitchConnect();
                     break;
                 case "code":
                     if (twDevice == null) GUILayout.Label(twStatus, sDim);
-                    else if (Streamer) GUILayout.Label("Браузер открыт: подтвердите вход на Twitch (код скрыт режимом стримера и уже скопирован)", sText);
-                    else GUILayout.Label($"Откройте twitch.tv/activate и введите код <color=#FFA727><b>{twDevice.user_code}</b></color> (уже скопирован, браузер открыт)", sText);
-                    if (GUILayout.Button("Отмена", sBtn, GUILayout.Width(100))) { twDevice = null; twState = "off"; }
+                    else if (Streamer) GUILayout.Label(T("Браузер открыт: подтвердите вход на Twitch (код скрыт режимом стримера и уже скопирован)", "The browser is open: confirm the sign-in on Twitch (the code is hidden by streamer mode and already copied)"), sText);
+                    else GUILayout.Label(T($"Откройте twitch.tv/activate и введите код <color=#FFA727><b>{twDevice.user_code}</b></color> (уже скопирован, браузер открыт)", $"Open twitch.tv/activate and enter the code <color=#FFA727><b>{twDevice.user_code}</b></color> (already copied, the browser is open)"), sText);
+                    if (GUILayout.Button(T("Отмена", "Cancel"), sBtn, GUILayout.Width(100))) { twDevice = null; twState = "off"; }
                     break;
                 default:
                     GUILayout.Label(twStatus, sText);
-                    if (GUILayout.Button("Отключить", sBtn, GUILayout.Width(120))) TwitchDisconnect();
+                    if (GUILayout.Button(T("Отключить", "Disconnect"), sBtn, GUILayout.Width(120))) TwitchDisconnect();
                     break;
             }
             GUILayout.EndHorizontal();
-            if (twState == "online" && twType?.Length > 0 && GUILayout.Button("Обновить награды на канале", sBtn)) StartCoroutine(SyncRewards());
+            if (twState == "online" && twType?.Length > 0 && GUILayout.Button(T("Обновить награды на канале", "Update the channel rewards"), sBtn)) StartCoroutine(SyncRewards());
         }
 
 #if LAB

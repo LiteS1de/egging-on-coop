@@ -1,5 +1,7 @@
 using UnityEngine;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Streamer mode: nothing that leads to a player's address is drawn on screen. IPs (host list, network log,
@@ -17,8 +19,8 @@ namespace EggCoop
 
         void DrawStreamerToggle()
         {
-            bool v = EggToggle(cfg.StreamerMode.Value, "Режим стримера — скрывать IP-адреса и коды на экране");
-            if (v != cfg.StreamerMode.Value) { cfg.StreamerMode.Value = v; Toast(v ? "Режим стримера включён: адреса и коды скрыты" : "Режим стримера выключен"); }
+            bool v = EggToggle(cfg.StreamerMode.Value, T("Режим стримера — скрывать IP-адреса и коды на экране", "Streamer mode: hide IP addresses and codes on screen"));
+            if (v != cfg.StreamerMode.Value) { cfg.StreamerMode.Value = v; Toast(v ? T("Режим стримера включён: адреса и коды скрыты", "Streamer mode on: addresses and codes are hidden") : T("Режим стримера выключен", "Streamer mode off")); }
         }
     }
 }

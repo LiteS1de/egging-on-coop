@@ -1,0 +1,96 @@
+﻿Egging On Co-op 0.7.0 - one shared world for 2-4 players
+
+INSTALL (every player; everyone needs the same game version)
+1. Unpack this archive anywhere (the desktop is fine).
+2. Run "Install.bat". It finds the game in Steam (if it can't, it asks for the folder with "Egging On.exe"),
+   installs the BepInEx mod loader (it is already in the archive, nothing to download) and the mod itself.
+   If the game is under Program Files, Windows asks for admin rights: allow it.
+   If Windows shows "Windows protected your PC", click "More info" -> "Run anyway".
+3. Start the game. Press F9 in the menu or in a level to open the co-op window.
+The mod speaks the language of your Windows (English or Russian); change it in F9 -> Settings -> Language.
+Update: download the new archive and run "Install.bat" again; nick, keys and stats are kept.
+Uninstall: "Uninstall.bat" (removes the mod, and BepInEx too if there are no other mods and you agree).
+By hand (if the script won't run): copy the contents of files\game into the game folder, replacing files.
+Everyone needs mod version 0.5.x or newer: 0.4 and older can't connect (the mod says "another mod version").
+
+HOW TO PLAY (the main way is Steam; everyone needs the Steam version of the game)
+Host: F9 -> type a nick -> "Host game" -> "Invite friends through Steam" (the Steam overlay opens).
+Friend: accept the Steam invite or click "Join Game" on the host in the Steam friends list.
+        If the game was closed, Steam starts it and connects.
+Traffic goes through Valve's servers: works behind any router, no Radmin, no port forwarding,
+and nobody's IP address is ever shown.
+
+Fallback (no Steam): the host opens F9 -> "Other ways" and sees the Radmin address (26.x.x.x:7788)
+and the invite code -> "Copy" and send it to a friend; the friend pastes it into
+F9 -> "Other ways" -> "Join".
+Over friends' eggs you see their nick, the distance, how far above or below they are, and "(cracked)".
+
+TELEPORT TO A FRIEND - key T (change it in F9 -> Settings -> Keys)
+- One friend: T takes you straight to them.
+- Two or more: T opens a list, press the player's number (Esc cancels).
+- You can teleport any time; if a friend dropped off the network, the top of the screen says so.
+- You land a little above your friend: you drop gently onto them and roll off beside them, nobody gets launched.
+- Teleport counter: in F9 (how many to whom, and each friend's total); the totals show up on the end credits.
+
+SHARED WORLD
+- Crates, buckets, pots, boards, buttons, bottles and billiard balls are the same for everyone.
+  Whoever pushes an object first "drives" it; the others see it move.
+  A broken bottle breaks for everyone. Moving platforms are in the same phase for everyone.
+- The host's world rules: on joining, a guest gets the host's object layout
+  (it is written into the guest's save too). Position, progress and skin stay your own.
+- Events are shared too: the broken pigeon window, the open microwave, the broken bell,
+  the fallen pipe and other one-time events happen for everyone. The top of the screen says who did it.
+- Shared checkpoints: if checkpoints (the drone) are on in your game, a pad that one player reached
+  opens for everyone, so you can call the drone and fly there. Without checkpoints this does nothing.
+- Not shared: the owl (it guides each player along their own path), the frying pan, the rooster boss (made for one).
+
+EMOTES AND PINGS - hold G (change it in F9 -> Settings -> Keys)
+- A wheel appears: hover a picture and release G, and the emote pops up over your egg for everyone.
+- The centre of the wheel has a cross: release G on it (or press Esc) to close without picking.
+- PING - click the mouse wheel: a triangle in your colour with your nick and the distance appears
+  where the camera looks, for 12 seconds. If the ping is off screen, an arrow at the edge points to it.
+  The key can be changed in F9.
+- The emote wheel has a "Ping" too: after picking it, click the spot you want to mark (Esc cancels).
+
+SHAME BOARD - in the F9 window and on the end credits
+- Who lost the most height, how many times they fell, the worst fall and how many times they cracked.
+- A fall counts when the egg comes to rest 4+ m lower than it was; teleports don't count.
+  Everyone sees falls of 15 m and more.
+- Everyone keeps their own numbers (in the config); friends get them while playing.
+  The host can reset the board for everyone.
+
+FOR STREAMERS (F9 -> Stream tab)
+- Streamer mode: IP addresses and invite codes on screen turn into dots, so you can open F9 on stream
+  without leaking your address or your friends'. "Copy" still copies the real address.
+  Turn it on before you open F9 on stream. Through Steam no addresses are shown at all.
+- Viewer effects for Twitch channel points and bits (points and bits need Twitch Affiliate or Partner):
+  "Connect Twitch" -> confirm the sign-in in the browser that opens. The mod creates a channel reward
+  for each enabled effect; the price, cooldown and switch of each are on the same tab
+  (hover an effect to see what it does). "Test" runs an effect without viewers.
+- For bits: the viewer writes the effect's name in the message (for example "Cheer100 wind"); the most
+  expensive named effect the bits cover runs.
+- While the egg is cracked or the game is paused, an effect waits; after a minute the points go back to the viewer.
+  While effects are off, paused (F10) or the game is closed, the channel rewards are paused.
+- The Twitch sign-in is kept in BepInEx\config\eggcoop-twitch.txt: never send this file to anyone.
+
+HOST SETTINGS (F9 window, before or during play)
+- "Collisions": eggs bump and bounce off each other. Off: you pass through each other.
+- "Hitting a friend cracks the shell": off means hitting a friend never cracks an egg.
+Guests see the host's choice in their F9 window.
+
+CAN'T CONNECT?
+- The most reliable way is Steam (see above). No Steam button: the game was not started from Steam.
+- Without Steam: Radmin VPN for everyone, the friend enters the host's Radmin address from F9.
+- Joining by code (without Radmin) fails if the host runs a VPN for all traffic;
+  the F9 window warns about it. Turn the VPN off or use Radmin.
+- Or the host forwards port 7788/UDP on the router.
+- If the internet blinks, a guest reconnects on their own within 30 seconds.
+- If the host and the guest have different game versions, the mod warns: world objects may not match.
+- The mod's log: BepInEx\LogOutput.log - send it if something goes wrong.
+
+Settings (nick, port, keys, language): BepInEx\config\eggcoop.cfg
+If friends' eggs jitter (bad internet, mobile network), set GhostDelayMs = 200 there.
+Uninstall by hand: delete winhttp.dll, doorstop_config.ini and the BepInEx folder.
+
+Emote images: Twemoji (c) Twitter/X and contributors, CC-BY 4.0, https://github.com/jdecked/twemoji
+BepInEx 5.4.23.5 (c) Bepis, MIT - shipped unchanged in this archive. Licenses are in the licenses folder.

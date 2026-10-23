@@ -23,7 +23,7 @@
 </p>
 
 > [!NOTE]
-> The mod's in-game text is in Russian for now.
+> The mod speaks English or Russian: it follows your Windows language, and you can switch it in F9 → Settings → Language.
 
 ---
 
@@ -70,35 +70,35 @@
   </tr>
   <tr>
     <td width="50%"><img src="docs/wheel.png" alt="Emote wheel"><p align="center"><sub>Emote wheel — hold G</sub></p></td>
-    <td width="50%"><img src="docs/f9-board.png" alt="Shame board"><p align="center"><sub>F9 → "Доска" (board): who fell how far</sub></p></td>
+    <td width="50%"><img src="docs/f9-board-en.png" alt="Shame board"><p align="center"><sub>F9 → Board: who fell how far</sub></p></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/f9-game.png" alt="Game tab"><p align="center"><sub>F9 → "Игра" (game): Steam invite, streamer mode hides addresses</sub></p></td>
-    <td width="50%"><img src="docs/f9-stream.png" alt="Stream tab"><p align="center"><sub>F9 → "Стрим" (stream): Twitch viewer effects, prices and cooldowns</sub></p></td>
+    <td width="50%"><img src="docs/f9-game-en.png" alt="Game tab"><p align="center"><sub>F9 → Game: Steam invite, streamer mode hides addresses</sub></p></td>
+    <td width="50%"><img src="docs/f9-stream-en.png" alt="Stream tab"><p align="center"><sub>F9 → Stream: Twitch viewer effects, prices and cooldowns</sub></p></td>
   </tr>
 </table>
 
 ## Install
 
 1. Download `EggCoop-<version>.zip` from [**Releases**](https://github.com/LiteS1de/egging-on-coop/releases/latest).
-2. Unpack it anywhere and run **`Установить.bat`** ("Install").
+2. Unpack it anywhere and run **`Install.bat`**.
 3. Press **F9** in the game.
 
 The script finds the game in your Steam libraries (or asks for the folder with `Egging On.exe`), installs the mod loader
 [BepInEx 5.4.23.5](https://github.com/BepInEx/BepInEx) — it is already in the zip — and the mod itself. Your settings and other mods are left alone.
 
 > [!TIP]
-> **Update** with `Установить.bat` from the new zip (nick, keys and stats are kept). **Uninstall** with `Удалить.bat`.
+> **Update** with `Install.bat` from the new zip (nick, keys and stats are kept). **Uninstall** with `Uninstall.bat`.
 
 > [!IMPORTANT]
-> All players need **the same mod version** and the same game version. Joining through Steam needs **the Steam version** of the game on every PC. Details are in `Инструкция.txt` inside the zip (Russian).
+> All players need **the same mod version** and the same game version. Joining through Steam needs **the Steam version** of the game on every PC. Details are in `Instructions.txt` inside the zip.
 
 ## How to play
 
-1. **Host:** F9 → nick → "Создать игру" (Host) → "Пригласить друзей через Steam" (invite through Steam).
+1. **Host:** F9 → nick → "Host game" → "Invite friends through Steam".
 2. **Friends:** accept the Steam invite or click "Join game" on the host in the Steam friends list. If the game is closed, Steam starts it.
 
-Without Steam: the host copies the invite code or Radmin address under F9 → "Другие способы" (other ways); friends paste it there and click "Подключиться" (Join).
+Without Steam: the host copies the invite code or Radmin address under F9 → "Other ways"; friends paste it there and click "Join".
 
 | Key | What it does |
 |:---:|---|
@@ -108,13 +108,13 @@ Without Steam: the host copies the invite code or Radmin address under F9 → "�
 | <kbd>mouse wheel</kbd> | ping where the camera is looking |
 | <kbd>F10</kbd> | pause viewer effects |
 
-Every key can be changed in F9 → "Настройки" (Settings).
+Every key can be changed in F9 → Settings.
 
 <details>
 <summary><b>Can't connect?</b></summary>
 
 - The most reliable way is Steam: everyone runs the Steam version of the game, the host invites from F9.
-- Without Steam: Radmin VPN for everyone, friends enter the host's Radmin address from F9 → "Другие способы" (other ways).
+- Without Steam: Radmin VPN for everyone, friends enter the host's Radmin address from F9 → "Other ways".
 - Joining by code fails if the host runs a full-traffic VPN — the F9 window warns about it.
 - Or the host forwards port **7788/UDP** on the router.
 - The mod's log is `BepInEx\LogOutput.log` in the game folder: attach it to an [issue](https://github.com/LiteS1de/egging-on-coop/issues).

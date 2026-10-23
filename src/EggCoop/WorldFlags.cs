@@ -5,6 +5,8 @@ using LiteNetLib;
 using LiteNetLib.Utils;
 using UnityEngine;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Stage 4b/4d: one-way world events (pigeon window, microwave, carnival bell, pipe end, the scene's OneTimeEvents)
@@ -87,7 +89,7 @@ namespace EggCoop
                 var w = Any<PigeonWindow>();
                 if (w != null && w.isActiveAndEnabled) w.BreakWindow();   // plays the pigeon timeline and sets the flag
                 else Persistent.instance.saveData.windowBroken = true;      // OnEnable shows it broken when we get there
-                done.Add("окно с голубем разбито");
+                done.Add(T("окно с голубем разбито", "the pigeon window is broken"));
             }
             if (f.Microwave && !s.microwaveOpened)
             {
@@ -99,7 +101,7 @@ namespace EggCoop
                     Call(mw, "openFeedback", "PlayFeedbacks");
                     Call(mw, "timeline", "Play");
                 }
-                done.Add("микроволновка открыта");
+                done.Add(T("микроволновка открыта", "the microwave is open"));
             }
             if (f.Bell && !s.bellBroken)
             {
@@ -118,7 +120,7 @@ namespace EggCoop
                         t.Field<RayFire.RayfireBomb>("bellBomb").Value?.Explode(Time.deltaTime);
                     }
                 }
-                done.Add("колокол разбит");
+                done.Add(T("колокол разбит", "the bell is broken"));
             }
             if (f.Pipe && !s.pipeEndDetached)
             {
@@ -132,7 +134,7 @@ namespace EggCoop
                     if (rb != null) rb.useGravity = true;
                     if (p.isActiveAndEnabled) Call(p, "detachFeedback", "PlayFeedbacks");
                 }
-                done.Add("труба отвалилась");
+                done.Add(T("труба отвалилась", "the pipe fell off"));
             }
             int events = 0;
             foreach (var h in f.OneTime)
@@ -144,7 +146,7 @@ namespace EggCoop
                 Plugin.Log.LogInfo($"World flags: one-time event {list[0].name} from player {from} ({(live != null ? "played" : "recorded")})");
                 events++;
             }
-            if (ApplyDrone(f.Drone)) done.Add("новая площадка дрона — можно лететь к ней");
+            if (ApplyDrone(f.Drone)) done.Add(T("новая площадка дрона — можно лететь к ней", "a new drone pad: you can fly to it"));
             if (done.Count > 0) Plugin.Notify($"{Plugin.NickOf(from)}: {string.Join(", ", done)}");
             if (done.Count > 0 || events > 0) Plugin.Log.LogInfo($"World flags from player {from}: {string.Join(", ", done)}; {events} one-time events");
         }

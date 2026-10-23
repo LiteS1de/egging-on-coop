@@ -7,6 +7,8 @@ using System.Runtime.InteropServices;
 using Steamworks;
 using UnityEngine;
 
+using static EggCoop.Lang;
+
 namespace EggCoop
 {
     // Steam as the main way in: the host opens a friends-only Steam lobby, friends join it from the overlay invite or
@@ -91,19 +93,19 @@ namespace EggCoop
         public void OpenLobby()
         {
             if (!Available || !net.IsHost) return;
-            Status = "Создаю лобби Steam…";
+            Status = T("Создаю лобби Steam…", "Creating a Steam lobby…");
             lobbyCreated.Set(SteamMatchmaking.CreateLobby(ELobbyType.k_ELobbyTypeFriendsOnly, CoopNet.MaxPlayers));
         }
 
         void OnLobbyCreated(LobbyCreated_t c, bool ioFailure)
         {
-            if (ioFailure || c.m_eResult != EResult.k_EResultOK) { Status = $"Steam не создал лобби ({c.m_eResult})"; return; }
+            if (ioFailure || c.m_eResult != EResult.k_EResultOK) { Status = T($"Steam не создал лобби ({c.m_eResult})", $"Steam did not create the lobby ({c.m_eResult})"); return; }
             if (!net.Active || !net.IsHost) { SteamMatchmaking.LeaveLobby(new CSteamID(c.m_ulSteamIDLobby)); return; }   // hosting stopped meanwhile
             Lobby = new CSteamID(c.m_ulSteamIDLobby);
             SteamMatchmaking.SetLobbyData(Lobby, LobbyKey, CoopNet.ConnectKey);
             SteamFriends.SetRichPresence("connect", "+connect_lobby " + Lobby.m_SteamID);   // "Join game" in friends' lists
             SteamFriends.SetRichPresence("status", "Egging On Co-op");
-            Status = "Лобби Steam открыто — пригласите друзей";
+            Status = T("Лобби Steam открыто — пригласите друзей", "Steam lobby is open: invite friends");
             Plugin.Log.LogInfo("Steam: lobby " + Lobby.m_SteamID);
         }
 
@@ -133,28 +135,28 @@ namespace EggCoop
         void JoinLobby(ulong id)
         {
             if (!Available) { pendingLobby = id; joinAfterInit = true; return; }
-            if (net.Active && net.IsHost) { Plugin.Notify("Вы сейчас хост — сначала отключитесь (F9), потом примите приглашение"); return; }
-            Status = "Захожу в лобби Steam…";
+            if (net.Active && net.IsHost) { Plugin.Notify(T("Вы сейчас хост — сначала отключитесь (F9), потом примите приглашение", "You are hosting: disconnect first (F9), then accept the invite")); return; }
+            Status = T("Захожу в лобби Steam…", "Joining the Steam lobby…");
             lobbyEntered.Set(SteamMatchmaking.JoinLobby(new CSteamID(id)));
         }
 
         void OnLobbyEntered(LobbyEnter_t c, bool ioFailure)
         {
             var lobby = new CSteamID(c.m_ulSteamIDLobby);
-            if (ioFailure || c.m_EChatRoomEnterResponse != (uint)EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess) { Status = "Не удалось зайти в лобби (оно закрыто или полное)"; Plugin.Notify(Status); return; }
+            if (ioFailure || c.m_EChatRoomEnterResponse != (uint)EChatRoomEnterResponse.k_EChatRoomEnterResponseSuccess) { Status = T("Не удалось зайти в лобби (оно закрыто или полное)", "Could not join the lobby (closed or full)"); Plugin.Notify(Status); return; }
             var owner = SteamMatchmaking.GetLobbyOwner(lobby);
             if (owner == SteamUser.GetSteamID()) return;   // our own lobby (host side)
             string key = SteamMatchmaking.GetLobbyData(lobby, LobbyKey);
             if (key != CoopNet.ConnectKey)
             {
                 SteamMatchmaking.LeaveLobby(lobby);
-                Status = $"У хоста другая версия мода ({(string.IsNullOrEmpty(key) ? "?" : key)}, у вас {CoopNet.ConnectKey})";
+                Status = T($"У хоста другая версия мода ({(string.IsNullOrEmpty(key) ? "?" : key)}, у вас {CoopNet.ConnectKey})", $"The host has another mod version ({(string.IsNullOrEmpty(key) ? "?" : key)}, yours is {CoopNet.ConnectKey})");
                 Plugin.Notify(Status);
                 return;
             }
             Lobby = lobby; hostId = owner;
             int port = pipe.OpenGuest(owner.m_SteamID);
-            Status = $"Подключаюсь через Steam к {HostName}…";
+            Status = T($"Подключаюсь через Steam к {HostName}…", $"Connecting through Steam to {HostName}…");
             Plugin.Log.LogInfo($"Steam: joined lobby {lobby.m_SteamID}, host {owner.m_SteamID}, pipe 127.0.0.1:{port}");
             net.Join("127.0.0.1:" + port);
         }
