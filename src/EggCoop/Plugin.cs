@@ -19,7 +19,7 @@ namespace EggCoop
     [BepInPlugin("eggcoop", "Egging On Co-op", Version)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Version = "0.4.1";
+        public const string Version = "0.4.2";
         public static ManualLogSource Log;
         static Plugin instance;
         readonly HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("eggcoop");
@@ -601,6 +601,28 @@ namespace EggCoop
             return t;
         }
 
+        // Anti-aliased rounded rectangle with a 1 px outline; border = radius so it 9-slices cleanly at any size.
+        static Texture2D Rounded(Color fill, Color outline, int radius, out RectOffset border)
+        {
+            int n = radius * 2 + 4;
+            var t = new Texture2D(n, n, TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            float c = n / 2f, half = c - 0.5f;
+            for (int y = 0; y < n; y++)
+                for (int x = 0; x < n; x++)
+                {
+                    // Signed distance to the rounded box edge (negative inside).
+                    float dx = Mathf.Max(Mathf.Abs(x + 0.5f - c) - (half - radius), 0f), dy = Mathf.Max(Mathf.Abs(y + 0.5f - c) - (half - radius), 0f);
+                    float d = Mathf.Sqrt(dx * dx + dy * dy) - radius;
+                    float inside = Mathf.Clamp01(0.5f - d), edge = Mathf.Clamp01(1f - Mathf.Abs(d + 0.5f));
+                    var col = Color.Lerp(fill, outline, outline.a > 0 ? edge : 0f);
+                    col.a *= inside;
+                    t.SetPixel(x, y, col);
+                }
+            t.Apply();
+            border = new RectOffset(radius + 2, radius + 2, radius + 2, radius + 2);
+            return t;
+        }
+
         // A tinted, readable copy of one of the game's own UI sprites (its textures are not CPU-readable).
         static Texture2D GameSprite(string name, Color tint, out RectOffset border)
         {
@@ -633,34 +655,42 @@ namespace EggCoop
             if (sWin != null) return;
             var font = Resources.FindObjectsOfTypeAll<Font>().FirstOrDefault(f => f.name == "Arvo-Regular");
             if (font == null && Time.unscaledTime < 20f) { BasicStyles(); return; }   // game UI not loaded yet: try again next frame
-            var panel = GameSprite("UIBevel", new Color(0f, 0f, 0f, 0.8f), out var panelBorder) ?? Tex(new Color(0f, 0f, 0f, 0.8f));
-            var hover = GameSprite("UIBevel", new Color(1f, 0.655f, 0.153f, 0.22f), out var hoverBorder) ?? Tex(new Color(1f, 0.655f, 0.153f, 0.22f));
-            var field = GameSprite("UIBevel", new Color(1f, 1f, 1f, 0.08f), out var fieldBorder) ?? Tex(new Color(1f, 1f, 1f, 0.08f));
+            // Rounded panels drawn here rather than copied from the game's UIBevel sprite: the copy left dark corner bits.
+            var panel = Rounded(new Color(0f, 0f, 0f, 0.8f), new Color(1f, 1f, 1f, 0.12f), 14, out var panelBorder);
+            var hover = Rounded(new Color(1f, 0.655f, 0.153f, 0.25f), new Color(1f, 0.655f, 0.153f, 0.6f), 7, out var hoverBorder);
+            var field = Rounded(new Color(1f, 1f, 1f, 0.07f), new Color(1f, 1f, 1f, 0.16f), 7, out var fieldBorder);
+            var track = Rounded(new Color(1f, 1f, 1f, 0.08f), Color.clear, 4, out var trackBorder);
+            var thumb = Rounded(new Color(1f, 0.655f, 0.153f, 0.85f), Color.clear, 4, out var thumbBorder);
+            var thumbHover = Rounded(Orange, Color.clear, 4, out _);
             eggIcon = GameSprite("smallEgg", Orange, out _);
             eggOff = GameSprite("smallEgg", new Color(1f, 1f, 1f, 0.3f), out _);
-            // The bevel's corners are 45 px of a 256 px sprite: draw them at half size so small widgets stay round, not blobby.
-            RectOffset Half(RectOffset o) => new RectOffset(o.left / 2, o.right / 2, o.top / 2, o.bottom / 2);
 
             GUIStyle Label(int size, Color c) { var st = new GUIStyle(GUI.skin.label) { font = font, fontSize = size, wordWrap = true, richText = true }; st.normal.textColor = c; return st; }
-            sWin = new GUIStyle(GUI.skin.window) { font = font, padding = new RectOffset(18, 18, 40, 14), fontSize = 20, alignment = TextAnchor.UpperCenter, border = panelBorder };
+            sWin = new GUIStyle { font = font, padding = new RectOffset(18, 18, 40, 14), fontSize = 20, alignment = TextAnchor.UpperCenter, border = panelBorder, contentOffset = new Vector2(0, -28) };   // title sits 12 px from the top, content starts at 40
             sWin.normal.background = sWin.onNormal.background = sWin.focused.background = sWin.onFocused.background = panel;
             sWin.normal.textColor = sWin.onNormal.textColor = sWin.focused.textColor = sWin.onFocused.textColor = Orange;
             sHead = Label(15, Orange); sHead.margin = new RectOffset(0, 0, 14, 4);
             sText = Label(14, Color.white);
             sDim = Label(12, Grey);
-            sBtn = new GUIStyle(GUI.skin.button) { font = font, fontSize = 14, fixedHeight = 28, border = Half(hoverBorder), padding = new RectOffset(10, 10, 4, 4) };
+            sBtn = new GUIStyle(GUI.skin.button) { font = font, fontSize = 14, fixedHeight = 28, border = hoverBorder, padding = new RectOffset(10, 10, 4, 4) };
             sBtn.normal.background = field; sBtn.hover.background = sBtn.active.background = hover;
             sBtn.normal.textColor = Color.white; sBtn.hover.textColor = sBtn.active.textColor = Orange;
             // Checkboxes are text buttons with the game's egg drawn in front: orange egg = on, faint egg = off.
             sToggle = Label(14, Color.white); sToggle.padding = new RectOffset(30, 4, 4, 4); sToggle.wordWrap = false;
             sToggle.hover.textColor = sToggle.active.textColor = Orange;
             tag = new GUIStyle(GUI.skin.label) { font = font, alignment = TextAnchor.MiddleCenter, fontSize = 17 };
-            sToast = new GUIStyle(GUI.skin.box) { font = font, fontSize = 16, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(40, 18, 9, 9), border = Half(panelBorder), richText = true };
+            sToast = new GUIStyle(GUI.skin.box) { font = font, fontSize = 16, alignment = TextAnchor.MiddleLeft, padding = new RectOffset(40, 18, 9, 9), border = panelBorder, richText = true };
             sToast.normal.background = panel; sToast.normal.textColor = Color.white;
             sPanel = new GUIStyle(sToast) { alignment = TextAnchor.UpperLeft, padding = new RectOffset(20, 20, 14, 14), fontSize = 16 };
             GUI.skin.textField.font = font; GUI.skin.textField.fontSize = 14;
             GUI.skin.textField.normal.background = GUI.skin.textField.hover.background = GUI.skin.textField.focused.background = field;
-            GUI.skin.textField.border = Half(fieldBorder); GUI.skin.textField.padding = new RectOffset(8, 8, 5, 5);
+            GUI.skin.textField.border = fieldBorder; GUI.skin.textField.padding = new RectOffset(8, 8, 5, 5);
+            // Thin scrollbar: faint track, orange thumb, no arrow buttons.
+            GUI.skin.verticalScrollbar.normal.background = track; GUI.skin.verticalScrollbar.border = trackBorder;
+            GUI.skin.verticalScrollbar.fixedWidth = 8; GUI.skin.verticalScrollbar.margin = new RectOffset(6, 0, 4, 4); GUI.skin.verticalScrollbar.padding = new RectOffset();
+            GUI.skin.verticalScrollbarThumb.normal.background = thumb; GUI.skin.verticalScrollbarThumb.hover.background = GUI.skin.verticalScrollbarThumb.active.background = thumbHover;
+            GUI.skin.verticalScrollbarThumb.border = thumbBorder; GUI.skin.verticalScrollbarThumb.fixedWidth = 8;
+            GUI.skin.verticalScrollbarUpButton.fixedHeight = GUI.skin.verticalScrollbarDownButton.fixedHeight = 0;
             GUI.skin.textField.normal.textColor = GUI.skin.textField.focused.textColor = GUI.skin.textField.hover.textColor = Color.white;
             Log.LogInfo($"UI styled: font={(font != null ? font.name : "default")} panel={(panel.width > 1)} egg={(eggIcon != null)}");
         }

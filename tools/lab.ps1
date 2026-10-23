@@ -106,7 +106,7 @@ switch ($cmd) {
         Copy-Item "$out\EggCoop.dll", "$out\LiteNetLib.dll", "$out\Mono.Nat.dll" "$stage\BepInEx\plugins\EggCoop"
         Copy-Item "$root\lab\p1\BepInEx\config\BepInEx.cfg" "$stage\BepInEx\config"
         Copy-Item "$root\dist-files\*" $stage
-        $zip = "$root\dist\EggCoop-0.4.1.zip"
+        $zip = "$root\dist\EggCoop-0.4.2.zip"
         Compress-Archive "$stage\*" $zip -Force
         Get-Item $zip | Select-Object FullName, Length
     }
