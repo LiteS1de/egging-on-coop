@@ -178,3 +178,4 @@ Owner's report and what 0.3.0 does about it:
   Shown in F9 and on the credits summary. Pure logic checked in src/SelfTest.
 - NOT VERIFIED between two players (RAM: two copies hang this PC now): emotes/pings/stats over the network, events
   reaching a friend, drone pads. lab.ps1 up -solo runs one copy.
+- Ping key (owner's call): middle mouse (KeyCode.Mouse2, config PingKey) pings where the camera looks (screen centre, eggs skipped); the wheel keeps a click-to-place ping. F9 key capture accepts mouse buttons 3-7. PASS: centre ping lands ~6 m past the egg along the camera line.

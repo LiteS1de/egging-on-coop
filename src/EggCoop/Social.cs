@@ -87,6 +87,8 @@ namespace EggCoop
                 return true;
             }
             if (Input.GetKeyDown(cfg.EmoteKey.Value) && InGame()) { wheelOpen = true; wheelHover = -1; UpdateCursor(); return true; }
+            // Quick ping: the cursor is locked to the screen centre while playing, i.e. where the camera looks (past our egg).
+            if (Input.GetKeyDown(cfg.PingKey.Value) && InGame()) { PlacePing(new Vector2(Screen.width / 2f, Screen.height / 2f)); return true; }
             return false;
         }
 

@@ -12,7 +12,7 @@ namespace EggCoop
     {
         public ConfigEntry<string> Nick, SignalUrl, StunServers, LastJoin, TpStats, ShameStats;
         public ConfigEntry<int> Port, GhostDelayMs;
-        public ConfigEntry<KeyCode> MenuKey, TpKey, EmoteKey;
+        public ConfigEntry<KeyCode> MenuKey, TpKey, EmoteKey, PingKey;
         public ConfigEntry<bool> Collide, CrackOnHit;
     }
 
@@ -55,7 +55,8 @@ namespace EggCoop
                 if (c > 0 && int.TryParse(part.Substring(c + 1), out var n)) tpCounts[part.Substring(0, c)] = n;
             }
             cfg.EmoteKey = Config.Bind("General", "EmoteKey", KeyCode.G, "Зажать — колесо эмоций и меток");
-            cfg.ShameStats = Config.Bind("Stats", "Shame", "", "Доска позора (ник:разбился,падений,худшее,потеряно м;...)");
+            cfg.PingKey = Config.Bind("General", "PingKey", KeyCode.Mouse2, "Метка туда, куда смотрит камера (Mouse2 — колёсико мыши)");
+            cfg.ShameStats =Config.Bind("Stats", "Shame", "", "Доска позора (ник:разбился,падений,худшее,потеряно м;...)");
             shame = Shame.Parse(cfg.ShameStats.Value);
             cfg.Port = Config.Bind("Network", "Port", 7788, "UDP-порт хоста");
             cfg.SignalUrl = Config.Bind("Network", "SignalUrl", "https://ntfy.sh", "ntfy-сервер для пробивки NAT");
@@ -230,7 +231,7 @@ namespace EggCoop
                     break;
                 case 1:
                     labHover = -1;
-                    PlacePing(new Vector2(Screen.width / 2f, Screen.height * 0.25f));
+                    PlacePing(new Vector2(Screen.width / 2f, Screen.height / 2f));   // what the ping key does
                     Log.LogInfo($"Lab ping: {(pings.TryGetValue(-1, out var p) ? p.at.ToString() : "none")} egg={egg} cam={(cam != null ? cam.transform.position.ToString() : "-")}");
                     bubbles[-1] = (6, Time.unscaledTime);
                     break;
@@ -855,9 +856,11 @@ namespace EggCoop
         {
             InitStyles();
             var e = Event.current;
+            // Extra mouse buttons (wheel click, side buttons) count as keys too; left/right stay for clicking the menu.
+            if (waitKey != null && e.type == EventType.MouseDown && e.button >= 2 && e.button <= 6) { e.keyCode = KeyCode.Mouse0 + e.button; e.type = EventType.KeyDown; }
             if (waitKey != null && e.type == EventType.KeyDown && e.keyCode != KeyCode.None)
             {
-                if (e.keyCode != KeyCode.Escape) (waitKey == "menu" ? cfg.MenuKey : waitKey == "emote" ? cfg.EmoteKey : cfg.TpKey).Value = e.keyCode;
+                if (e.keyCode != KeyCode.Escape) (waitKey == "menu" ? cfg.MenuKey : waitKey == "emote" ? cfg.EmoteKey : waitKey == "ping" ? cfg.PingKey : cfg.TpKey).Value = e.keyCode;
                 waitKey = null;
                 ignoreKeysFrame = Time.frameCount + 1;   // the same press must not also open the menu or teleport
                 e.Use();
@@ -1038,8 +1041,9 @@ namespace EggCoop
             GUILayout.Label(("Клавиши").ToUpperInvariant(), sHead);
             KeyRow("Меню кооператива", "menu", cfg.MenuKey);
             KeyRow("Телепорт к другу", "tp", cfg.TpKey);
-            KeyRow("Эмоции и метки", "emote", cfg.EmoteKey);
-            GUILayout.Label("При двух и более друзьях клавиша телепорта открывает выбор: нажмите цифру нужного игрока. Эмоции: зажмите клавишу, наведите мышь на картинку и отпустите.", sDim);
+            KeyRow("Эмоции (зажать)", "emote", cfg.EmoteKey);
+            KeyRow("Метка", "ping", cfg.PingKey);
+            GUILayout.Label("При двух и более друзьях клавиша телепорта открывает выбор: нажмите цифру нужного игрока. Эмоции: зажмите клавишу, наведите мышь на картинку и отпустите. Метка ставится туда, куда смотрит камера (по умолчанию колёсико мыши, Mouse2); в колесе эмоций есть метка по клику.", sDim);
 
             GUILayout.Space(8);
             GUILayout.BeginHorizontal();
