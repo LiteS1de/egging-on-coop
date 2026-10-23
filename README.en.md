@@ -48,6 +48,19 @@
 - **Through Steam:** the host invites friends from the Steam overlay, friends click "Join game". Traffic goes through Valve's relays: works behind any router, no Radmin, no port forwarding, nobody's IP is ever shown.
 - Fallbacks: invite code, Radmin VPN or IP. If the internet blinks, a guest reconnects on its own.
 
+## In action
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/demo-emotes.gif" alt="Emote wheel and emotes over the eggs"><p align="center"><sub>Emote wheel and emotes over the eggs</sub></p></td>
+    <td width="50%"><img src="docs/demo-effects.gif" alt="Viewer effects: confetti, moon gravity, slow motion"><p align="center"><sub>Viewer effects: confetti, moon gravity, slow motion</sub></p></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/demo-wheel.gif" alt="Emotes on the move"><p align="center"><sub>Emotes on the move</sub></p></td>
+    <td width="50%"><img src="docs/demo-ice.gif" alt="Emotes and pings in the ice level"><p align="center"><sub>Emotes and pings in the ice level</sub></p></td>
+  </tr>
+</table>
+
 ## Screenshots
 
 <table>
